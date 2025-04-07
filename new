@@ -1,0 +1,43 @@
+
+static u32 GetSuitableMemoryIndex(vulkan_context* VkCtx, VkMemoryPropertyFlags Properties,
+                                  u32 MemoryTypeBits) {
+    for (u32 i = 0; i < VkCtx->MemoryProperties.memoryTypeCount; i++) {
+        if ((MemoryTypeBits & (1 << i)) &&
+            ((VkCtx->MemoryProperties.memoryTypes[i].propertyFlags & Properties) == Properties)) {
+            return i;
+        }
+    }
+    dprintf(2, "failed to find suitable memory\n");
+    Assert(0);
+    exit(1);
+}
+
+static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer, VkDeviceMemory* BufferMemory,
+                               u64 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags) {
+    // NOTE(acol): memory allocation in gpu
+    VkBufferCreateInfo BufferInfo = {};
+    BufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    BufferInfo.size = Size;
+    BufferInfo.usage = UsageFlags;
+    BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(VkCtx->Device, &BufferInfo, 0, Buffer) != VK_SUCCESS) {
+        dprintf(2, "failed to create the vertex buffer\n");
+        exit(1);
+    }
+
+    VkMemoryRequirements VertBufferRequirements = {};
+    vkGetBufferMemoryRequirements(VkCtx->Device, Buffer, &VertBufferRequirements);
+
+    VkMemoryAllocateInfo BufferAllocateInfo = {};
+    BufferAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    BufferAllocateInfo.allocationSize = VertBufferRequirements.size;
+    BufferAllocateInfo.memoryTypeIndex =
+        GetSuitableMemoryIndex(VkCtx, MemoryFlags, VertBufferRequirements.memoryTypeBits);
+
+    if (vkAllocateMemory(VkCtx->Device, &BufferAllocateInfo, 0, BufferMemory) != VK_SUCCESS) {
+        dprintf(2, "Failed to allocate buffer memory\n");
+        exit(1);
+    }
+    vkBindBufferMemory(VkCtx->Device, Buffer, BufferMemory, 0);
+}
