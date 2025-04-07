@@ -1,0 +1,15 @@
+-DENABLE_ASSERT
+-O2
+-mavx2
+-mfma
+-lc++abi 
+-fno-exceptions 
+-fno-rtti 
+-pthread
+-ffinite-math-only
+-fno-math-errno
+-fno-trapping-math
+-fno-signed-zeros
+-freciprocal-math
+-fassociative-math
+-fuse-ld=lld
