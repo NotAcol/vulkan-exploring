@@ -42,7 +42,7 @@ static arena *ArenaAlloc(arena_alloc_params Params) {
     Arena->FreeLast = 0;
     Arena->FreeSize = 0;
 
-#if defined(ARENA_LOGGING)
+#if ARENA_LOGGING
     dprintf(2, "Arena Allocated\n");
     dprintf(2, "  Reserved: %llu\n", Arena->Reserved);
     dprintf(2, "  Commited: %llu\n", Arena->Commited);
@@ -56,7 +56,7 @@ static arena *ArenaAlloc(arena_alloc_params Params) {
 }
 
 static void ArenaRelease(arena *Arena) {
-#if defined(ARENA_LOGGING)
+#if ARENA_LOGGING
     dprintf(2, "Arena Released\n");
     dprintf(2, "  Reserved: %llu\n", Arena->Reserved);
     dprintf(2, "  Commited: %llu\n", Arena->Commited);
@@ -121,14 +121,14 @@ static void *ArenaPushNoZero(arena *Arena, u64 Size, u64 Align) {
             u64 CommitSize = AlignPow2(EndPos - Current->Pos, OS_LARGE_PAGE_SIZE);
             OsCommitLarge((u8 *)Current + Current->Commited, CommitSize);
             Current->Commited += CommitSize;
-#if defined(ARENA_LOGGING)
+#if ARENA_LOGGING
             dprintf(2, "Arena Commited on push: %llu\n", CommitSize);
 #endif
         } else {
             u64 CommitSize = AlignPow2(EndPos - Current->Pos, OS_PAGE_SIZE);
             OsCommit((u8 *)Current + Current->Commited, CommitSize);
             Current->Commited += CommitSize;
-#if defined(ARENA_LOGGING)
+#if ARENA_LOGGING
             dprintf(2, "Arena Commited on push: %llu\n", CommitSize);
 #endif
         }
@@ -147,7 +147,7 @@ static void *ArenaPushNoZero(arena *Arena, u64 Size, u64 Align) {
 }
 
 static void *ArenaPush(arena *Arena, u64 Size, u64 Align) {
-#if defined(ARENA_LOGGING)
+#if ARENA_LOGGING
     dprintf(2, "Arena Pushed: %llu\n", Size);
 #endif
     void *Ret = ArenaPushNoZero(Arena, Size, Align);
@@ -181,7 +181,12 @@ static void ArenaPopTo(arena *Arena, u64 Pos) {
     Current->Pos = NewPos;
 }
 
-static void ArenaReset(arena *Arena) { ArenaPopTo(Arena, 0); }
+static void ArenaReset(arena *Arena) {
+#if ARENA_LOGGING
+    dprintf(2, "Arena reset\n");
+#endif
+    ArenaPopTo(Arena, 0);
+}
 
 static void ArenaPop(arena *Arena, u64 Size) {
     u64 CurrentPos = ArenaPos(Arena);

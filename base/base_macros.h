@@ -359,9 +359,8 @@
     ((First) == 0 ? ((First) = (Last) = (New), (New)->Next = 0) : ((New)->Next = (First), (First) = (New)))
 #define SllQueuePushFront(First, Last, New) SllQueuePushFront_N(First, Last, New, Next)
 
-#define SllQueuePop_N(First, Last, New, Next) \
-    ((First) == (Last) ? (First) = (Last) = 0 : (First) = (First)->Next)
-#define SllQueuePop(First, Last, New) SllQueuePop_N(First, Last, New, Next)
+#define SllQueuePop_N(First, Last, Next) ((First) == (Last) ? (First) = (Last) = 0 : (First) = (First)->Next)
+#define SllQueuePop(First, Last) SllQueuePop_N(First, Last, Next)
 
 #define SllStackPush_N(Last, New, Next) ((New)->Next = (Last), (Last) = (New))
 #define SllStackPush(Last, New) SllStackPush_N(Last, New, Next)

@@ -1,9 +1,6 @@
-#define ARENA_LOGGING
+#define ARENA_LOGGING 1
 #include "base/base_include.h"
 #include "base/base_include.cpp"
-
-// TODO(acol): remove render passes  and framebuffers objects!!!!!!!!!!!!!!!!
-// use image view and dynamic rendering instead
 
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #define GLFW_INCLUDE_VULKAN
@@ -17,6 +14,7 @@
 static u64 RecreateCount = {};
 
 static arena* GlobalArena = {};
+static arena* TestDeletionArena = {};
 
 #if VK_VALIDATE
     #define VALIDATION_LAYERS X(VK_LAYER_KHRONOS_validation)
@@ -50,9 +48,7 @@ typedef struct vulkan_context {
     VkShaderModule VertShader;
     VkShaderModule FragShader;
     VkPipelineLayout PipelineLayout;
-    VkRenderPass RenderPass;
     VkPipeline GraphicsPipeline;
-    VkFramebuffer* Framebuffers;
     VkSurfaceCapabilitiesKHR Capabilities;
     VkCommandPool CommandPool;
     VkCommandBuffer CommandBuffer;
@@ -80,13 +76,108 @@ typedef struct tutorial_vertex {
     v3 Color;
 } tutorial_vertex;
 
-static void VulkanCopyToGpu(vulkan_context* VkCtx, VkBuffer Source, VkBuffer Dest, u64 Size) {
-    // TODO(acol): I am really not sure about this shit we are alocating a command buffer just to throw it
-    // away???? Also having memory pools is yucky can I even manage this on my own and not bother ???
-    //
-    // FIXME OK THIS IS CONFIRMED RETARDED
-    // locking for the transfer is also retarded af
+typedef enum vulkan_item {
+    VULKANITEM_Device,
+    VULKANITEM_Memory,
+    VULKANITEM_Buffer,
+    VULKANITEM_Sempahore,
+    VULKANITEM_Fence,
+    VULKANITEM_CommandPool,
+    VULKANITEM_ShaderModule,
+    VULKANITEM_Pipeline,
+    VULKANITEM_PipelineLayout,
+    VULKANITEM_ImageView,
+    VULKANITEM_Surface,
+    VULKANITEM_Swapchain,
+    VULKANITEM_DebugMessenger,
+    VULKANITEM_Insance,
+} vulkan_item;
 
+typedef struct vulkan_deletion_node {
+    void* Item;
+    vulkan_item Type;
+    vulkan_deletion_node* Next;
+} vulkan_deletion_node;
+
+typedef struct vulkan_deletion_queue {
+    vulkan_deletion_node* Last = 0;
+
+    u64 Count = 0;
+} vulkan_deletion_queue;
+
+static vulkan_deletion_queue* DeletionQueue = {};
+
+static void VulkanDeletionQueuePush(arena* __restrict Arena, vulkan_deletion_queue* __restrict Queue,
+                                    void* __restrict Item, vulkan_item Type) {
+    vulkan_deletion_node* NewNode = (vulkan_deletion_node*)ArenaPush(Arena, sizeof(vulkan_deletion_node));
+    NewNode->Item = Item;
+    NewNode->Type = Type;
+    SllStackPush(Queue->Last, NewNode);
+    ++Queue->Count;
+}
+
+static void VulkanDeletionQueuePop(vulkan_context* VkCtx, vulkan_deletion_queue* Queue) {
+    Assert(Queue->Count > 0);
+    vulkan_deletion_node* Node = Queue->Last;
+    switch (Node->Type) {
+        case VULKANITEM_Device: {
+            vkDestroyDevice(*(VkDevice*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Memory: {
+            vkFreeMemory(VkCtx->Device, *(VkDeviceMemory*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Buffer: {
+            vkDestroyBuffer(VkCtx->Device, *(VkBuffer*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Sempahore: {
+            vkDestroySemaphore(VkCtx->Device, *(VkSemaphore*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Fence: {
+            vkDestroyFence(VkCtx->Device, *(VkFence*)Node->Item, 0);
+        } break;
+        case VULKANITEM_CommandPool: {
+            vkDestroyCommandPool(VkCtx->Device, *(VkCommandPool*)Node->Item, 0);
+        } break;
+        case VULKANITEM_ShaderModule: {
+            vkDestroyShaderModule(VkCtx->Device, *(VkShaderModule*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Pipeline: {
+            vkDestroyPipeline(VkCtx->Device, *(VkPipeline*)Node->Item, 0);
+        } break;
+        case VULKANITEM_PipelineLayout: {
+            vkDestroyPipelineLayout(VkCtx->Device, *(VkPipelineLayout*)Node->Item, 0);
+        } break;
+        case VULKANITEM_ImageView: {
+            vkDestroyImageView(VkCtx->Device, *(VkImageView*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Swapchain: {
+            vkDestroySwapchainKHR(VkCtx->Device, *(VkSwapchainKHR*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Surface: {
+            vkDestroySurfaceKHR(VkCtx->Instance, *(VkSurfaceKHR*)Node->Item, 0);
+        } break;
+        case VULKANITEM_DebugMessenger: {
+            PFN_vkDestroyDebugUtilsMessengerEXT DestroyMessengerCallback =
+                (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(VkCtx->Instance,
+                                                                           "vkDestroyDebugUtilsMessengerEXT");
+            DestroyMessengerCallback(VkCtx->Instance, *(VkDebugUtilsMessengerEXT*)Node->Item, 0);
+        } break;
+        case VULKANITEM_Insance: {
+            vkDestroyInstance(*(VkInstance*)Node->Item, 0);
+        } break;
+    }
+    --Queue->Count;
+    SllStackPop(Queue->Last);
+}
+
+static void VulkanDeletionQueueClear(vulkan_context* VkCtx, vulkan_deletion_queue* Queue) {
+    Assert(Queue->Count > 0);
+    while (Queue->Count > 0) {
+        VulkanDeletionQueuePop(VkCtx, Queue);
+    }
+}
+
+static void VulkanCopyToGpu(vulkan_context* VkCtx, VkBuffer Source, VkBuffer Dest, u64 Size) {
     vkResetCommandBuffer(VkCtx->TransientCommandBuffer, 0);
 
     VkCommandBufferBeginInfo BeginInfo = {};
@@ -117,14 +208,14 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     VkDebugUtilsMessageTypeFlagsEXT MessageType,
                                                     const VkDebugUtilsMessengerCallbackDataEXT* CallbackData,
                                                     void* UserData) {
-    if (MessageSeverity != VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        dprintf(2, "%s\n", CallbackData->pMessage);
+    if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        dprintf(2, TXT_UWHT "INFO" TXT_RST ": %s\n\n", CallbackData->pMessage);
     } else if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        dprintf(2, TXT_BLU "%s\n" TXT_RST, CallbackData->pMessage);
+        dprintf(2, TXT_UBLU "VERBOSE" TXT_BLU ": " TXT_RST "%s\n\n", CallbackData->pMessage);
     } else if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        dprintf(2, TXT_YEL "%s\n" TXT_RST, CallbackData->pMessage);
+        dprintf(2, TXT_UYEL "WARNING" TXT_YEL ": " TXT_RST "%s\n\n", CallbackData->pMessage);
     } else if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        dprintf(2, TXT_RED "%s\n" TXT_RST, CallbackData->pMessage);
+        dprintf(2, TXT_URED "ERROR" TXT_RED ":" TXT_RST " %s\n\n", CallbackData->pMessage);
     }
 
     return VK_FALSE;
@@ -203,15 +294,17 @@ static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
         (VkPresentModeKHR*)ArenaPush(Temp.Arena, sizeof(VkPresentModeKHR) * PresentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(Device, Surface, &PresentModeCount, PresentModes);
 
-    VkCtx->SurfaceFormat = {};
-    for (u32 i = 0; i < FormatCount; i++) {
-        if (Formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
-            Formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            VkCtx->SurfaceFormat = Formats[i];
-            break;
-        }
-    }
-    if (VkCtx->SurfaceFormat.format != VK_FORMAT_B8G8R8A8_SRGB) VkCtx->SurfaceFormat = Formats[0];
+    //    VkCtx->SurfaceFormat = {};
+    //    for (u32 i = 0; i < FormatCount; i++) {
+    //        if (Formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+    //            Formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+    //            VkCtx->SurfaceFormat = Formats[i];
+    //            break;
+    //        }
+    //    }
+    //    if (VkCtx->SurfaceFormat.format != VK_FORMAT_B8G8R8A8_SRGB) VkCtx->SurfaceFormat = Formats[0];
+    VkCtx->SurfaceFormat = {.format = VK_FORMAT_B8G8R8A8_SRGB,
+                            .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
     VkCtx->PresentMode = {};
     for (u32 i = 0; i < PresentModeCount; i++) {
@@ -249,7 +342,6 @@ static void RecreateSwapchain(vulkan_context* VkCtx) {
     vkDeviceWaitIdle(VkCtx->Device);
 
     for (u32 i = 0; i < VkCtx->ImageCount; i++) {
-        vkDestroyFramebuffer(VkCtx->Device, VkCtx->Framebuffers[i], 0);
         vkDestroyImageView(VkCtx->Device, VkCtx->ImageViews[i], 0);
     }
 
@@ -309,22 +401,6 @@ static void RecreateSwapchain(vulkan_context* VkCtx) {
             exit(1);
         }
     }
-
-    VkFramebufferCreateInfo FrameBufferInfo = {};
-    for (u32 i = 0; i < VkCtx->ImageCount; i++) {
-        FrameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        FrameBufferInfo.renderPass = VkCtx->RenderPass;
-        FrameBufferInfo.attachmentCount = 1;
-        FrameBufferInfo.pAttachments = &VkCtx->ImageViews[i];
-        FrameBufferInfo.width = VkCtx->SwapchainExtent.width;
-        FrameBufferInfo.height = VkCtx->SwapchainExtent.height;
-        FrameBufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(VkCtx->Device, &FrameBufferInfo, 0, &VkCtx->Framebuffers[i]) != VK_SUCCESS) {
-            dprintf(2, "Failed to create framebuffer %u\n", i);
-            exit(1);
-        }
-    }
     RecreateCount++;
     return;
 }
@@ -361,6 +437,7 @@ static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer, VkDevice
         dprintf(2, "failed to create the vertex buffer\n");
         exit(1);
     }
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)Buffer, VULKANITEM_Buffer);
 
     VkMemoryRequirements BufferRequirements = {};
     vkGetBufferMemoryRequirements(VkCtx->Device, *Buffer, &BufferRequirements);
@@ -375,6 +452,8 @@ static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer, VkDevice
         dprintf(2, "Failed to allocate buffer memory\n");
         exit(1);
     }
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)BufferMemory, VULKANITEM_Memory);
+
     vkBindBufferMemory(VkCtx->Device, *Buffer, *BufferMemory, 0);
 }
 
@@ -386,6 +465,13 @@ int main(void) {
     GlobalArena = ArenaAlloc(AllocParams);
 
     vulkan_context VkCtx = {};
+
+    AllocParams.ReserveSize = KB(4);
+    AllocParams.CommitSize = KB(4);
+    TestDeletionArena = ArenaAlloc(AllocParams);
+
+    DeletionQueue = (vulkan_deletion_queue*)ArenaPush(TestDeletionArena, sizeof(vulkan_deletion_queue));
+
     /* ==============================================================================================
 
                                     // NOTE(acol): Glfw init stuff
@@ -503,15 +589,20 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Instance, VULKANITEM_Insance);
+
 #if VK_VALIDATE
-    // NOTE(acol): this shitty api doesnt even give you the function call to create a callback so you have to
-    // ask for a poitner to it
+    // NOTE(acol): this shitty api doesnt even give you the function call to create a callback so you have
+    // to ask for a poitner to it
 
     PFN_vkCreateDebugUtilsMessengerEXT CreateMessengerCallback =
         (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(VkCtx.Instance,
                                                                   "vkCreateDebugUtilsMessengerEXT");
 
     CreateMessengerCallback(VkCtx.Instance, &MessengerInfo, 0, &VkCtx.MessengerHandle);
+
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.MessengerHandle,
+                            VULKANITEM_DebugMessenger);
 
 #endif
 
@@ -525,6 +616,8 @@ int main(void) {
         dprintf(2, "Failed to create Wayland surface\n");
         return 1;
     }
+
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Surface, VULKANITEM_Surface);
 
     // NOTE(acol): select physical device
     u32 DeviceCount = 0;
@@ -577,10 +670,23 @@ int main(void) {
     f32 QueuePrio = 1.0f;
     QueueInfo.pQueuePriorities = &QueuePrio;
 
+    // NOTE(acol): device features
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT DynamicVertexInputFeatures = {};
     DynamicVertexInputFeatures.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
     DynamicVertexInputFeatures.vertexInputDynamicState = VK_TRUE;
+
+    VkPhysicalDeviceVulkan12Features Features12 = {};
+    Features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    Features12.pNext = &DynamicVertexInputFeatures;
+    Features12.bufferDeviceAddress = VK_TRUE;
+    Features12.descriptorIndexing = VK_TRUE;
+
+    VkPhysicalDeviceVulkan13Features Features13 = {};
+    Features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    Features13.pNext = &Features12;
+    Features13.dynamicRendering = VK_TRUE;
+    Features13.synchronization2 = VK_TRUE;
 
     // NOTE(acol): Create logical device
     const char* RequiredExtensions[] = {VK_REQUIRED_DEVICE_EXTENSIONS};
@@ -593,11 +699,13 @@ int main(void) {
     DeviceInfo.pEnabledFeatures = &DeviceFeatures;
     DeviceInfo.enabledExtensionCount = ArrayCount(RequiredExtensions);
     DeviceInfo.ppEnabledExtensionNames = RequiredExtensions;
-    DeviceInfo.pNext = &DynamicVertexInputFeatures;
+    DeviceInfo.pNext = &Features13;
     if (vkCreateDevice(VkCtx.PhysicalDevice, &DeviceInfo, 0, &VkCtx.Device) != VK_SUCCESS) {
         dprintf(2, "Failed to create logical device\n");
         return 1;
     }
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Device, VULKANITEM_Device);
+
     vkGetDeviceQueue(VkCtx.Device, GraphicsQueueIndex, 0, &VkCtx.GraphicsQueue);
 
     VkSwapchainCreateInfoKHR SwapchainInfo = {};
@@ -625,6 +733,8 @@ int main(void) {
         dprintf(2, "Failed to creat swapchain\n");
         return 1;
     }
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Swapchain, VULKANITEM_Swapchain);
+
     ArenaReset(GlobalArena);
     // NOTE(acol): This feels kinda weird cause I shouldn't pop it off the arena. Maybe I need to make an
     // arena that wont reset ?
@@ -654,55 +764,11 @@ int main(void) {
             dprintf(2, "Failed to create image view %u\n", i);
             return 1;
         }
+        VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.ImageViews[i],
+                                VULKANITEM_ImageView);
     }
 
     dprintf(2, "Sizeof Vulkan context %lu\n", sizeof(VkCtx));
-    /* ==============================================================================================
-
-                                // NOTE(acol): Create render pass
-
-      ============================================================================================= */
-
-    VkAttachmentDescription ColorAttachment = {};
-    ColorAttachment.format = VkCtx.SurfaceFormat.format;
-    ColorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    ColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    ColorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    ColorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    ColorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    ColorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    ColorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference ColorAttachmentRef = {};
-    // NOTE(acol): attachment is an index
-    ColorAttachmentRef.attachment = 0;
-    ColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription Subpass = {};
-    Subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    Subpass.colorAttachmentCount = 1;
-    Subpass.pColorAttachments = &ColorAttachmentRef;
-
-    VkSubpassDependency SubpassDependency = {};
-    SubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    SubpassDependency.dstSubpass = 0;
-    SubpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    SubpassDependency.srcAccessMask = 0;
-    SubpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    SubpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    VkRenderPassCreateInfo RenderPassInfo = {};
-    RenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    RenderPassInfo.attachmentCount = 1;
-    RenderPassInfo.pAttachments = &ColorAttachment;
-    RenderPassInfo.subpassCount = 1;
-    RenderPassInfo.pSubpasses = &Subpass;
-    RenderPassInfo.dependencyCount = 1;
-    RenderPassInfo.pDependencies = &SubpassDependency;
-    if (vkCreateRenderPass(VkCtx.Device, &RenderPassInfo, 0, &VkCtx.RenderPass) != VK_SUCCESS) {
-        dprintf(2, "failed to create render pass");
-        return 1;
-    }
 
     /* ==============================================================================================
 
@@ -738,6 +804,9 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.VertShader,
+                            VULKANITEM_ShaderModule);
+
     FileInfo = OsFileStat(FragmentHandle);
     u8* FragmentShader = (u8*)ArenaPush(GlobalArena, FileInfo.Size);
     Read = OsFileRead(FragmentHandle, FragmentShader, {0, FileInfo.Size});
@@ -756,6 +825,9 @@ int main(void) {
         dprintf(2, "Failed to create Framgnet shader module\n");
         return 1;
     }
+
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.FragShader,
+                            VULKANITEM_ShaderModule);
 
     VkPipelineShaderStageCreateInfo VertShaderInfo = {};
     VertShaderInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -789,10 +861,6 @@ int main(void) {
     InputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     InputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
-#if 1
-    // NOTE(acol): scissor rectangle and viewport can be set at drawtime or at pipeline creation, will stick
-    // with drawtime cause it's more flexible and tutorial guys said it has no performance penalty, surely he
-    // measured it cluegi
     VkPipelineDynamicStateCreateInfo DynamicStateInfo = {};
     DynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     DynamicStateInfo.dynamicStateCount = 3;
@@ -803,22 +871,6 @@ int main(void) {
     ViewportStateInfo.viewportCount = 1;
     ViewportStateInfo.scissorCount = 1;
 
-#else
-    VkViewport Viewport = {};
-    Viewport.x = 0.0f;
-    Viewport.y = 0.0f;
-    Viewport.width = (f32)VkCtx.SwapchainExtent.width;
-    Viewport.height = (f32)VkCtx.SwapchainExtent.height;
-    Viewport.minDepth = 0.0f;
-    Viewport.maxDepth = 1.0f;
-
-    VkRect2D Scissor = {};
-    Scissor.offset = {0, 0};
-    Scissor.extent = VkCtx.SwapchainExtent;
-
-    ViewportStateInfo.pViewports = &Viewport;
-    ViewportStateInfo.pScissors = &Scissor;
-#endif
     VkPipelineRasterizationStateCreateInfo RasterizationInfo = {};
     RasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     RasterizationInfo.depthClampEnable = VK_FALSE;
@@ -881,6 +933,16 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.PipelineLayout,
+                            VULKANITEM_PipelineLayout);
+
+    VkPipelineRenderingCreateInfoKHR PipelineRenderingInfo = {};
+    PipelineRenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    PipelineRenderingInfo.pNext = 0;
+    PipelineRenderingInfo.colorAttachmentCount = 1;
+    PipelineRenderingInfo.pColorAttachmentFormats = &VkCtx.SurfaceFormat.format;
+    PipelineRenderingInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+
     VkGraphicsPipelineCreateInfo PipelineInfo = {};
     PipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     PipelineInfo.stageCount = 2;
@@ -894,7 +956,7 @@ int main(void) {
     PipelineInfo.pColorBlendState = &ColorBlendingInfo;
     PipelineInfo.pDynamicState = &DynamicStateInfo;
     PipelineInfo.layout = VkCtx.PipelineLayout;
-    PipelineInfo.renderPass = VkCtx.RenderPass;
+    PipelineInfo.pNext = &PipelineRenderingInfo;
     PipelineInfo.subpass = 0;
     // NOTE(acol): These are for creating new pipelines using this one as the base cause it's faster that way
     // and whatnot
@@ -907,29 +969,14 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.GraphicsPipeline,
+                            VULKANITEM_Pipeline);
+
     /* ==============================================================================================
 
-                        // NOTE(acol): Create frame buffer and command pools
+                        // NOTE(acol): Create command pools
 
       ============================================================================================= */
-
-    VkCtx.Framebuffers = (VkFramebuffer*)ArenaPush(GlobalArena, sizeof(VkFramebuffer) * VkCtx.ImageCount);
-
-    for (u32 i = 0; i < VkCtx.ImageCount; i++) {
-        VkFramebufferCreateInfo FrameBufferInfo = {};
-        FrameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        FrameBufferInfo.renderPass = VkCtx.RenderPass;
-        FrameBufferInfo.attachmentCount = 1;
-        FrameBufferInfo.pAttachments = &VkCtx.ImageViews[i];
-        FrameBufferInfo.width = VkCtx.SwapchainExtent.width;
-        FrameBufferInfo.height = VkCtx.SwapchainExtent.height;
-        FrameBufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(VkCtx.Device, &FrameBufferInfo, 0, &VkCtx.Framebuffers[i]) != VK_SUCCESS) {
-            dprintf(2, "Failed to create framebuffer %u\n", i);
-            return 1;
-        }
-    }
 
     VkCommandPoolCreateInfo PoolInfo = {};
     PoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -940,10 +987,16 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.CommandPool,
+                            VULKANITEM_CommandPool);
+
     if (vkCreateCommandPool(VkCtx.Device, &PoolInfo, 0, &VkCtx.TransientCommandPool) != VK_SUCCESS) {
         dprintf(2, "Failed to create commnad pool\n");
         return 1;
     }
+
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.TransientCommandPool,
+                            VULKANITEM_CommandPool);
 
     /* ==============================================================================================
 
@@ -984,6 +1037,11 @@ int main(void) {
         return 1;
     }
 
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.RenderSemaphore,
+                            VULKANITEM_Sempahore);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.ImageSemaphore,
+                            VULKANITEM_Sempahore);
+
     VkFenceCreateInfo FenceInfo = {};
     FenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     FenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -991,6 +1049,7 @@ int main(void) {
         dprintf(2, "Failed to create fence\n");
         return 1;
     }
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.InFlightFence, VULKANITEM_Fence);
 
     /* ==============================================================================================
 
@@ -1039,7 +1098,6 @@ int main(void) {
     BindingDescription.stride = sizeof(tutorial_vertex);
     BindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     BindingDescription.divisor = 1;
-    printf("weird macro thing: %llu\n", OffsetOfMember(tutorial_vertex, Position));
 
     VkVertexInputAttributeDescription2EXT* AttributeDescription =
         (VkVertexInputAttributeDescription2EXT*)ArenaPush(GlobalArena,
@@ -1059,6 +1117,8 @@ int main(void) {
 
     PFN_vkCmdSetVertexInputEXT vkCmdSetVertexInputEXT =
         (PFN_vkCmdSetVertexInputEXT)vkGetDeviceProcAddr(VkCtx.Device, "vkCmdSetVertexInputEXT");
+
+    // PFN_vkQueueSubmit2KHR vkQueueSubmit2KHR =
 
     CreateVulkanBuffer(&VkCtx, &VkCtx.VertexBuffer, &VkCtx.VertexBufferMemory, sizeof(Vertices),
                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -1117,24 +1177,24 @@ int main(void) {
             return 1;
         }
 
-        vkCmdSetVertexInputEXT(VkCtx.CommandBuffer, 1, &BindingDescription, 2, AttributeDescription);
         VkClearValue ClearColor = {{{0.0f, 0.0f, 0.0f, 0.0f}}};
 
-        VkRenderPassBeginInfo RenderPassBeginInfo = {};
-        RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RenderPassBeginInfo.renderPass = VkCtx.RenderPass;
-        RenderPassBeginInfo.framebuffer = VkCtx.Framebuffers[ImageIndex];
-        RenderPassBeginInfo.renderArea.offset = {0, 0};
-        RenderPassBeginInfo.renderArea.extent = VkCtx.SwapchainExtent;
-        RenderPassBeginInfo.clearValueCount = 1;
-        RenderPassBeginInfo.pClearValues = &ClearColor;
+        VkRenderingAttachmentInfoKHR AttachmentInfo = {};
+        AttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        AttachmentInfo.imageView = VkCtx.ImageViews[ImageIndex];
+        AttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        AttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        AttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        AttachmentInfo.clearValue = ClearColor;
 
-        vkCmdBeginRenderPass(VkCtx.CommandBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(VkCtx.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VkCtx.GraphicsPipeline);
-        VkDeviceSize Offsets[] = {0};
-        vkCmdBindVertexBuffers(VkCtx.CommandBuffer, 0, 1, &VkCtx.VertexBuffer, Offsets);
-        vkCmdBindIndexBuffer(VkCtx.CommandBuffer, VkCtx.IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        VkRenderingInfo RenderInfo = {};
+        RenderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        RenderInfo.renderArea = {.offset = {0, 0}, .extent = VkCtx.SwapchainExtent};
+        RenderInfo.layerCount = 1;
+        RenderInfo.colorAttachmentCount = 1;
+        RenderInfo.pColorAttachments = &AttachmentInfo;
+        RenderInfo.pDepthAttachment = 0;
+        RenderInfo.pStencilAttachment = 0;
 
         VkViewport Viewport = {};
         Viewport.x = 0.0f;
@@ -1143,35 +1203,103 @@ int main(void) {
         Viewport.height = (f32)VkCtx.SwapchainExtent.height;
         Viewport.minDepth = 0.0f;
         Viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(VkCtx.CommandBuffer, 0, 1, &Viewport);
 
         VkRect2D Scissor = {};
         Scissor.offset = {0, 0};
         Scissor.extent = VkCtx.SwapchainExtent;
+        VkDeviceSize Offsets[] = {0};
+
+        // NOTE(acol): transform swapchain image you get to format for writing onto
+        VkImageMemoryBarrier2 ImageBarriers[2] = {};
+        ImageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        ImageBarriers[0].image = VkCtx.Images[ImageIndex];
+        ImageBarriers[0].srcAccessMask = 0;  // memory op to wait for
+        ImageBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait for
+        ImageBarriers[0].dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait on
+        ImageBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait on
+        ImageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        ImageBarriers[0].newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        ImageBarriers[0].subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                             .baseMipLevel = 0,
+                                             .levelCount = 1,
+                                             .baseArrayLayer = 0,
+                                             .layerCount = 1};
+
+        // NOTE(acol): transform swapchain image from pipleine output to present format
+        ImageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        ImageBarriers[1].image = VkCtx.Images[ImageIndex];
+        ImageBarriers[1].srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait for
+        ImageBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait for
+        ImageBarriers[1].dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;            // memory op to wait on
+        ImageBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;  // stage to wait on
+        ImageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        ImageBarriers[1].newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        ImageBarriers[1].subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                             .baseMipLevel = 0,
+                                             .levelCount = 1,
+                                             .baseArrayLayer = 0,
+                                             .layerCount = 1};
+
+        VkDependencyInfo SourceImageDependency = {};
+        SourceImageDependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        SourceImageDependency.imageMemoryBarrierCount = 2;
+        SourceImageDependency.pImageMemoryBarriers = ImageBarriers;
+
+        vkCmdPipelineBarrier2(VkCtx.CommandBuffer, &SourceImageDependency);
+
+        // NOTE(acol): Actual rendering commands
+        vkCmdBeginRendering(VkCtx.CommandBuffer, &RenderInfo);
+
+        // NOTE(acol): Resolve dynamic state of the pipeline
+        vkCmdSetVertexInputEXT(VkCtx.CommandBuffer, 1, &BindingDescription, 2, AttributeDescription);
+        vkCmdSetViewport(VkCtx.CommandBuffer, 0, 1, &Viewport);
         vkCmdSetScissor(VkCtx.CommandBuffer, 0, 1, &Scissor);
 
+        // NOTE(acol): Bind to pipeline
+        vkCmdBindPipeline(VkCtx.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VkCtx.GraphicsPipeline);
+
+        // NOTE(acol): Vertexes to draw and their indexes to avoid repeating, this is in GPU memory
+        vkCmdBindVertexBuffers(VkCtx.CommandBuffer, 0, 1, &VkCtx.VertexBuffer, Offsets);
+        vkCmdBindIndexBuffer(VkCtx.CommandBuffer, VkCtx.IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        // NOTE(acol): Draw command
         vkCmdDrawIndexed(VkCtx.CommandBuffer, ArrayCount(Indices), 1, 0, 0, 0);
-        vkCmdEndRenderPass(VkCtx.CommandBuffer);
+
+        vkCmdEndRendering(VkCtx.CommandBuffer);
 
         if (vkEndCommandBuffer(VkCtx.CommandBuffer) != VK_SUCCESS) {
             dprintf(2, "failed to record command buffer\n");
             return 1;
         }
 
-        VkPipelineStageFlags WaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        // NOTE(acol): set up in gpu synchronization
+        VkSemaphoreSubmitInfo WaitSemaInfo = {};
+        WaitSemaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        WaitSemaInfo.semaphore = VkCtx.ImageSemaphore;
+        WaitSemaInfo.value = 1;
+        WaitSemaInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        // NOTE(acol): Submit command buffer
-        VkSubmitInfo SubmitInfo = {};
-        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        SubmitInfo.waitSemaphoreCount = 1;
-        SubmitInfo.pWaitSemaphores = &VkCtx.ImageSemaphore;
-        SubmitInfo.pWaitDstStageMask = WaitStages;
-        SubmitInfo.commandBufferCount = 1;
-        SubmitInfo.pCommandBuffers = &VkCtx.CommandBuffer;
-        SubmitInfo.signalSemaphoreCount = 1;
-        SubmitInfo.pSignalSemaphores = &VkCtx.RenderSemaphore;
+        VkSemaphoreSubmitInfo SignalSemaInfo = {};
+        SignalSemaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        SignalSemaInfo.semaphore = VkCtx.RenderSemaphore;
+        SignalSemaInfo.value = 1;
+        SignalSemaInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-        vkQueueSubmit(VkCtx.GraphicsQueue, 1, &SubmitInfo, VkCtx.InFlightFence);
+        VkCommandBufferSubmitInfo CommandBufferSubmitInfo = {};
+        CommandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        CommandBufferSubmitInfo.commandBuffer = VkCtx.CommandBuffer;
+
+        // NOTE(acol): Submit command buffer with a fence
+        VkSubmitInfo2 SubmitInfo = {};
+        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        SubmitInfo.waitSemaphoreInfoCount = 1;
+        SubmitInfo.pWaitSemaphoreInfos = &WaitSemaInfo;
+        SubmitInfo.commandBufferInfoCount = 1;
+        SubmitInfo.pCommandBufferInfos = &CommandBufferSubmitInfo;
+        SubmitInfo.signalSemaphoreInfoCount = 1;
+        SubmitInfo.pSignalSemaphoreInfos = &SignalSemaInfo;
+
+        vkQueueSubmit2(VkCtx.GraphicsQueue, 1, &SubmitInfo, VkCtx.InFlightFence);
 
         VkPresentInfoKHR PresentInfo = {};
         PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1195,7 +1323,7 @@ int main(void) {
 
         StartOfFrame += __rdtsc();
         u64 Fps = 1000000 / (StartOfFrame / 3600);
-        printf("FPS: %llu                                              \r", Fps);
+        printf("FPS: %llu  \r", Fps);
     }
     printf("\n");
     vkDeviceWaitIdle(VkCtx.Device);
@@ -1205,39 +1333,8 @@ int main(void) {
                                     // NOTE(acol): Vulkan terminate stuff
 
       ============================================================================================= */
+    VulkanDeletionQueueClear(&VkCtx, DeletionQueue);
 
-    vkFreeMemory(VkCtx.Device, VkCtx.IndexBufferMemory, 0);
-    vkDestroyBuffer(VkCtx.Device, VkCtx.IndexBuffer, 0);
-    vkFreeMemory(VkCtx.Device, VkCtx.StagingBufferMemory, 0);
-    vkDestroyBuffer(VkCtx.Device, VkCtx.StagingBuffer, 0);
-    vkFreeMemory(VkCtx.Device, VkCtx.VertexBufferMemory, 0);
-    vkDestroyBuffer(VkCtx.Device, VkCtx.VertexBuffer, 0);
-    vkDestroyFence(VkCtx.Device, VkCtx.InFlightFence, 0);
-    vkDestroySemaphore(VkCtx.Device, VkCtx.ImageSemaphore, 0);
-    vkDestroySemaphore(VkCtx.Device, VkCtx.RenderSemaphore, 0);
-    vkDestroyCommandPool(VkCtx.Device, VkCtx.CommandPool, 0);
-    vkDestroyCommandPool(VkCtx.Device, VkCtx.TransientCommandPool, 0);
-    for (u32 i = 0; i < VkCtx.ImageCount; i++) {
-        vkDestroyFramebuffer(VkCtx.Device, VkCtx.Framebuffers[i], 0);
-    }
-    vkDestroyPipeline(VkCtx.Device, VkCtx.GraphicsPipeline, 0);
-    vkDestroyPipelineLayout(VkCtx.Device, VkCtx.PipelineLayout, 0);
-    vkDestroyRenderPass(VkCtx.Device, VkCtx.RenderPass, 0);
-    vkDestroyShaderModule(VkCtx.Device, VkCtx.VertShader, 0);
-    vkDestroyShaderModule(VkCtx.Device, VkCtx.FragShader, 0);
-    for (u32 i = 0; i < VkCtx.ImageCount; i++) {
-        vkDestroyImageView(VkCtx.Device, VkCtx.ImageViews[i], 0);
-    }
-    vkDestroySwapchainKHR(VkCtx.Device, VkCtx.Swapchain, 0);
-    vkDestroyDevice(VkCtx.Device, 0);
-    vkDestroySurfaceKHR(VkCtx.Instance, VkCtx.Surface, 0);
-#if VK_VALIDATE
-    PFN_vkDestroyDebugUtilsMessengerEXT DestroyMessengerCallback =
-        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(VkCtx.Instance,
-                                                                   "vkDestroyDebugUtilsMessengerEXT");
-    DestroyMessengerCallback(VkCtx.Instance, VkCtx.MessengerHandle, 0);
-#endif
-    vkDestroyInstance(VkCtx.Instance, 0);
     ArenaRelease(GlobalArena);
     // glfw terminate stuff
     glfwDestroyWindow(Window);
