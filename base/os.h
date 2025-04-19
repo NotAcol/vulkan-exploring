@@ -16,7 +16,9 @@ typedef i32 os_file_handle;
 typedef struct file_info {
     // NOTE(acol): Just this for now but will probably extend
     u64 Size = 0;
+    u64 LastModified = 0;
 } file_info;
+struct timespec st_mtim; /* Time of last modification */
 
 static void *OsReserve(u64 Size);
 static b32 OsCommit(void *Ptr, u64 Size);

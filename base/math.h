@@ -101,8 +101,8 @@ typedef union u64v2 {
     u64 V[2];
 } u64v2;
 
-// NOTE(acol): 2d intiger vector 2, mostly for rectangles of pixels and whatnot
-typedef union i2v2 {
+// NOTE(acol): intiger matrix 2x2, mostly for rectangles of pixels and whatnot
+typedef union im2 {
     struct {
         iv2 Min;
         iv2 Max;
@@ -113,7 +113,7 @@ typedef union i2v2 {
     };
     iv2 P[2];
     i32 V[4];
-} i2v2;
+} im2;
 
 static f32 Sqrt(f32 Val);
 static f32 Sin(f32 Val);

@@ -85,7 +85,8 @@ static void *ArenaPushNoZero(arena *Arena, u64 Size, u64 Align) {
         arena *NewBlock = Arena->FreeLast;
 
         // NOTE(acol):  This is a separate linked list from the growth chain.
-        //              It will fail NewBlock!=0 check if there isnt a free list so no need for flag check
+        //              It will fail NewBlock!=0 check if there isnt a free list so no need for flag
+        //              check
         for (arena *PrevBlock = 0; NewBlock != 0; PrevBlock = NewBlock, NewBlock = NewBlock->Prev) {
             if (NewBlock->Reserved >= AlignPow2(Size, Align)) {
                 if (PrevBlock) {
@@ -94,7 +95,8 @@ static void *ArenaPushNoZero(arena *Arena, u64 Size, u64 Align) {
                     Arena->FreeLast = NewBlock->Prev;
                 }
                 Arena->FreeSize -= NewBlock->Reserved;
-                // AsanUnpoison((u8*)NewBlock + ARENA_STRUCT_SIZE, NewBlock->ReserveSize - ARENA_STRUCT_SIZE);
+                // AsanUnpoison((u8*)NewBlock + ARENA_STRUCT_SIZE, NewBlock->ReserveSize -
+                // ARENA_STRUCT_SIZE);
             }
         }
 
@@ -105,8 +107,8 @@ static void *ArenaPushNoZero(arena *Arena, u64 Size, u64 Align) {
                 ReserveSize = AlignPow2(Size + ARENA_STRUCT_SIZE, Align);
                 CommitSize = ReserveSize;
             }
-            NewBlock =
-                ArenaAlloc({.Flags = Current->Flags, .ReserveSize = ReserveSize, .CommitSize = CommitSize});
+            NewBlock = ArenaAlloc(
+                {.Flags = Current->Flags, .ReserveSize = ReserveSize, .CommitSize = CommitSize});
         }
         NewBlock->BasePos = Current->BasePos + Current->Reserved;
         SllStackPush_N(Arena->Current, NewBlock, Prev);
@@ -167,7 +169,7 @@ static void ArenaPopTo(arena *Arena, u64 Pos) {
             AsanPoison((u8 *)Current + ARENA_STRUCT_SIZE, Current->Reserved - ARENA_STRUCT_SIZE);
         }
     } else {
-        for (arena *Temp = 0; Current->BasePos >= PopPos; Current = Temp) {
+        for (arena *Temp = 0; Current->BasePos >= PopPos && (Current != Arena); Current = Temp) {
             Temp = Current->Prev;
             OsRelease(Current, Current->Reserved);
         }
@@ -182,8 +184,11 @@ static void ArenaPopTo(arena *Arena, u64 Pos) {
 }
 
 static void ArenaReset(arena *Arena) {
+//    __builtin_debugtrap();
 #if ARENA_LOGGING
-    dprintf(2, "Arena reset\n");
+    static u64 Count = 0;
+    Count++;
+    dprintf(2, "Arena reset, Count: %llu\n", Count);
 #endif
     ArenaPopTo(Arena, 0);
 }

@@ -76,8 +76,8 @@ typedef struct arena_alloc_params {
 static arena *ArenaAlloc(arena_alloc_params Params);
 static void ArenaRelease(arena *Arena);
 static u64 ArenaPos(arena *Arena);
-static void *ArenaPush(arena *Arena, u64 Size, u64 Align = 1);
-static void *ArenaPushZero(arena *Arena, u64 Size, u64 Align = 1);
+static void *ArenaPush(arena *Arena, u64 Size, u64 Align = 4);
+static void *ArenaPushZero(arena *Arena, u64 Size, u64 Align = 4);
 static void ArenaPopTo(arena *Arena, u64 Pos);
 static void ArenaReset(arena *Arena);
 static void ArenaPop(arena *Arena, u64 Size);

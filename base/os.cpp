@@ -25,8 +25,9 @@ static void OsDecommit(void *Ptr, u64 Size) {
 static void OsRelease(void *Ptr, u64 Size) { munmap(Ptr, Size); }
 
 static void *OsReserveLarge(u64 Size) {
-    void *Temp = mmap(0, Size, PROT_NONE,
-                      MAP_HUGETLB | MAP_HUGE_2MB | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    void *Temp =
+        mmap(0, Size, PROT_NONE,
+             MAP_HUGETLB | MAP_HUGE_2MB | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     return Temp == MAP_FAILED ? (void *)0 : Temp;
 }
 
@@ -73,6 +74,7 @@ static file_info OsFileStat(os_file_handle File) {
     fstat(File, &StatStruct);
     file_info FileInfo = {};
     FileInfo.Size = (u64)StatStruct.st_size;
+    FileInfo.LastModified = (u64)StatStruct.st_ctim.tv_nsec;
     return FileInfo;
 }
 
@@ -81,6 +83,7 @@ static file_info OsFileStat(string Path) {
     stat((char *)Path.Str, &StatStruct);
     file_info FileInfo = {};
     FileInfo.Size = (u64)StatStruct.st_size;
+    FileInfo.LastModified = (u64)StatStruct.st_ctim.tv_nsec;
     return FileInfo;
 }
 
@@ -145,7 +148,8 @@ static void *OsFileMap(os_file_handle File, os_access_flags Flags, u64v2 MapWind
     if (Flags & OSACCESS_Read) LinuxFlags |= PROT_READ;
     if (Flags & OSACCESS_Write) LinuxFlags |= PROT_WRITE;
 
-    Ret = mmap(0, MapWindow.Max - MapWindow.Min, LinuxFlags, MAP_PRIVATE | MAP_POPULATE, File, MapWindow.Min);
+    Ret = mmap(0, MapWindow.Max - MapWindow.Min, LinuxFlags, MAP_PRIVATE | MAP_POPULATE, File,
+               MapWindow.Min);
 
     if (Ret == MAP_FAILED) return (void *)0;
     return Ret;

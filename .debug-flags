@@ -1,8 +1,8 @@
 -DENABLE_ASSERT
 -DPROFILE=1
 -DVK_VALIDATE=1
+-DARENA_LOGGING=0
 -mavx2
--lc++abi 
 -fno-exceptions 
 -fno-rtti 
 -Wall 

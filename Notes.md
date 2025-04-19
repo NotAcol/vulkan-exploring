@@ -18,3 +18,5 @@
 demotetohelperinvocation 
 scalarblocklayout 
 timelinesemaphores
+
+need to use resolve attachments and not vkCmdResolveIamge() for multisampling 
