@@ -7,8 +7,8 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
-#define WIDTH 1000
-#define HEIGHT 1000
+#define WIDTH 600
+#define HEIGHT 600
 
 static u64 RecreateCount = {};
 
@@ -75,6 +75,12 @@ typedef struct tutorial_vertex {
     v3 Position;
     v3 Color;
 } tutorial_vertex;
+
+typedef struct uniform_buffer {
+    m4 Model;
+    m4 View;
+    m4 Projection;
+} uniform_buffer;
 
 typedef enum vulkan_item {
     VULKANITEM_Device,
@@ -564,7 +570,7 @@ static void RecreatePipeleine(vulkan_context* VkCtx) {
 
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyInfo = {};
     InputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    InputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     InputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineDynamicStateCreateInfo DynamicStateInfo = {};
@@ -582,7 +588,7 @@ static void RecreatePipeleine(vulkan_context* VkCtx) {
     RasterizationInfo.depthClampEnable = VK_FALSE;
     RasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
     RasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
-    RasterizationInfo.lineWidth = 5.0f;
+    RasterizationInfo.lineWidth = 1.0f;
     RasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
     RasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
     RasterizationInfo.depthBiasEnable = VK_FALSE;
@@ -1084,7 +1090,7 @@ int main(void) {
 
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyInfo = {};
     InputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    InputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     InputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineDynamicStateCreateInfo DynamicStateInfo = {};
@@ -1102,7 +1108,7 @@ int main(void) {
     RasterizationInfo.depthClampEnable = VK_FALSE;
     RasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
     RasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
-    RasterizationInfo.lineWidth = 5.0f;
+    RasterizationInfo.lineWidth = 1.0f;
     RasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
     RasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
     RasterizationInfo.depthBiasEnable = VK_FALSE;
@@ -1324,31 +1330,31 @@ int main(void) {
 
     // NOTE(acol): Dynamic vertex stuff
     tutorial_vertex Vertices[] = {
+        //        {{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        //        {{-1.0f, 0.0f, 0.0f}, {1.0f, 0.8f, 0.8f}},
+        //
+        //        {{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        //        {{0.0f, -1.0f, 0.0f}, {0.8f, 1.0f, 0.8f}},
+        //
+        //        {{0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+        //        {{0.0f, 0.0f, -1.0f}, {0.8f, 0.8f, 1.0f}}
+
         // NOTE(acol): TRIANG1
-        {{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f, 0.0f, 0.0f}, {1.0f, 0.8f, 0.8f}},
-
-        {{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{0.0f, -1.0f, 0.0f}, {0.8f, 1.0f, 0.8f}},
-
-        {{0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        {{0.0f, 0.0f, -1.0f}, {0.8f, 0.8f, 1.0f}}
-
-        //                               {{0.0f, -0.577f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        //                               {{0.5f, 0.289f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        //                               {{-0.5f, 0.289f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        //                               // NOTE(acol): TRIANG2
-        //                               {{0.0f, -0.577f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        //                               {{0.5f, 0.289f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        //                               {{0.0f, 0.0f, 0.8165f}, {0.8f, 1.0f, 0.0f}},
-        //                               // NOTE(acol): TRIANG3
-        //                               {{0.0f, -0.577f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        //                               {{-0.5f, 0.289f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        //                               {{0.0f, 0.0f, 0.8165f}, {0.8f, 0.0f, 1.0f}},
-        //                               // NOTE(acol): TRIANG3
-        //                               {{0.5f, 0.289f, 0.0f}, {1.8f, 1.0f, 1.0f}},
-        //                               {{-0.5f, 0.289f, 0.0f}, {1.8f, 1.0f, 1.0f}},
-        //                               {{0.0f, 0.0f, 0.8165f}, {1.8f, 1.0f, 1.0f}}
+        {{0.0f, -0.577f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{-0.5f, 0.289f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, 0.289f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        // NOTE(acol): TRIANG2
+        {{0.0f, 0.0f, 0.8165f}, {0.0f, 1.0f, 0.0f}},
+        {{0.0f, -0.577f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f, 0.289f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        // NOTE(acol): TRIANG3
+        {{0.0f, 0.0f, 0.8165f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f, 0.289f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{0.0f, -0.577f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        // NOTE(acol): TRIANG4
+        {{0.0f, 0.0f, 0.8165f}, {1.0f, 1.0f, 1.0f}},
+        {{0.5f, 0.289f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+        {{-0.5f, 0.289f, 0.0f}, {1.0f, 1.0f, 1.0f}},
     };
     //    u32 Indices[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
@@ -1559,6 +1565,7 @@ int main(void) {
                                AttributeDescriptions);
         vkCmdSetViewport(VkCtx.CommandBuffer, 0, 1, &Viewport);
         vkCmdSetScissor(VkCtx.CommandBuffer, 0, 1, &Scissor);
+        vkCmdSetPrimitiveTopology(VkCtx.CommandBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
         // NOTE(acol): Bind to pipeline
         vkCmdBindPipeline(VkCtx.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,

@@ -13,18 +13,18 @@ layout(push_constant) uniform push_constants {
 layout(location = 0) out vec3 FragColor;
 
 void main() {
-    float TimeToAngle = PI * (PushConstants.Time / 2000.0f);
+    float TimeToAngle = PI * (PushConstants.Time / 1000.0f);
 
-    float AngZ = (0) * PI / 180.f;
-    float AngX = (30) * PI / 180.f;
-    float AngY = TimeToAngle; //(10.0) * PI / 180.f;
+    float AngZ = (30) * PI / 180.f;
+    float AngX = (10) * PI / 180.f;
+    float AngY = TimeToAngle / 2.0; //(0.0) * PI / 180.f;
 
-    mat3 RotationZ = mat3(sin(AngZ), cos(AngZ), 0, -cos(AngZ), sin(AngZ), 0, 0, 0, 1.0);
+    mat3 RotationZ = mat3(cos(AngZ), -sin(AngZ), 0, sin(AngZ), cos(AngZ), 0, 0, 0, 1.0);
 
     mat3 RotationX = mat3(1., 0., 0., 0., cos(AngX), -sin(AngX), 0., sin(AngX), cos(AngX));
 
     mat3 RotationY = mat3(cos(AngY), 0., sin(AngY), 0., 1., 0., -sin(AngY), 0., cos(AngY));
 
-    gl_Position = vec4((RotationX * RotationY * RotationZ * InPosition) + vec3(0., 0., 0.9001), 2.0);
+    gl_Position = vec4((RotationX * RotationY * RotationZ * (InPosition / 2.0)) + vec3(0., 0., 0.5), 1.0);
     FragColor = InColor;
 }

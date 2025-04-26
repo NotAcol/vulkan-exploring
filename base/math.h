@@ -76,6 +76,99 @@ typedef union v4 {
     f32 V[4];
 } v4;
 
+typedef union m2 {
+    struct {
+        v2 Min;
+        v2 Max;
+    };
+    struct {
+        v2 P0;
+        v2 P1;
+    };
+    struct {
+        v2 R0;
+        v2 R1;
+    };
+    struct {
+        f32 X0;
+        f32 Y0;
+
+        f32 X1;
+        f32 Y1;
+    };
+    v2 P[2];
+    v2 R[2];
+    f32 V[4];
+} m2;
+
+typedef union m3 {
+    struct {
+        v3 P0;
+        v3 P1;
+        v3 P2;
+    };
+    struct {
+        v3 R0;
+        v3 R1;
+        v3 R2;
+    };
+    struct {
+        f32 X0;
+        f32 Y0;
+        f32 Z0;
+
+        f32 X1;
+        f32 Y1;
+        f32 Z1;
+
+        f32 X2;
+        f32 Y2;
+        f32 Z2;
+    };
+    v3 P[3];
+    v3 R[3];
+    f32 V[9];
+} m3;
+
+typedef union m4 {
+    struct {
+        v4 P0;
+        v4 P1;
+        v4 P2;
+        v4 P3;
+    };
+    struct {
+        v4 R0;
+        v4 R1;
+        v4 R2;
+        v4 R3;
+    };
+    struct {
+        f32 X0;
+        f32 Y0;
+        f32 Z0;
+        f32 W0;
+
+        f32 X1;
+        f32 Y1;
+        f32 Z1;
+        f32 W1;
+
+        f32 X2;
+        f32 Y2;
+        f32 Z2;
+        f32 W2;
+
+        f32 X3;
+        f32 Y3;
+        f32 Z3;
+        f32 W3;
+    };
+    v4 P[4];
+    v4 R[4];
+    f32 V[16];
+} m4;
+
 // NOTE(acol): intiger vector 2
 typedef union iv2 {
     struct {

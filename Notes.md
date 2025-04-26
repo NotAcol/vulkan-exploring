@@ -1,7 +1,8 @@
 # TODO
 ---------------------
 
-- [ ] Vulkan triangle 1Bil LOC btw :) 
+- [x] Vulkan triangle 1Bil LOC btw :) 
+- [ ] FIgure out vulkan abstractions
 - [ ] Figure out how the fuck to do wayland input and window without glfw
 - [ ] Os shared object and ring buffers
 - [ ] Threading and get profiler to work with it
