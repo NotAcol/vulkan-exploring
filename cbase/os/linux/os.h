@@ -27,14 +27,12 @@ enum {
 };
 
 typedef struct file_info {
-    // NOTE(acol): Just this for now but will probably extend
     string8 Name;
     u64 Size;
     u64 Modified;
     u64 Created;
+    file_property_flags Flags;
 } file_info;
-
-// struct timespec st_mtim; /* Time of last modification */
 
 static void *OsReserve(u64 Size);
 static b32 OsCommit(void *Ptr, u64 Size);
@@ -45,15 +43,16 @@ static b32 OsCommitLarge(void *Ptr, u64 Size);
 
 static os_file_handle OsFileOpen(string8 Path, os_access_flags Flags);
 static void OsFileClose(os_file_handle File);
-static void OsFileDelete(string8 Path);
-static file_info OsFileStat(os_file_handle File);
-static file_info OsFileStat(string8 Path);
+static b32 OsFileDelete(string8 Path);
+// static file_info OsFileInfoFromHandle(os_file_handle File);
+static file_info *OsFileStat(arena *Arena, string8 Path);
+static u64 OsFileRead(os_file_handle File, v2_u64 ReadWindow, void *Data);
+static u64 OsFileWrite(os_file_handle File, v2_u64 WriteWindow, void *Data);
+static void *OsFileMap(os_file_handle File, os_access_flags Flags, v2_u64 MapWindow);
+static void OsFileUnmap(void *Ptr, v2_u64 MapWindow);
+
 static b32 OsMakeDir(string8 Path);
 static b32 OsDeleteDir(string8 Path);
-static u64 OsFileRead(os_file_handle File, void *Data, u64v2 ReadWindow);
-static u64 OsFileWrite(os_file_handle File, void *Data, u64v2 WriteWindow);
-static void *OsFileMap(os_file_handle File, os_access_flags Flags, u64v2 MapWindow);
-static void OsFileUnmap(void *Ptr, u64v2 MapWindow);
 
 static u64 OsReadTimer(void);
 static u64 OsTimerFrequency(void);
