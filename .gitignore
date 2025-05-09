@@ -1,2 +1,4 @@
 base.zip
 a.out
+shaders/frag.spv
+shaders/vert.spv
