@@ -119,11 +119,9 @@ typedef struct push_constants {
 
 static vulkan_deletion_queue* DeletionQueue = {};
 
-static void VulkanDeletionQueuePush(arena* __restrict Arena,
-                                    vulkan_deletion_queue* __restrict Queue, void* __restrict Item,
-                                    vulkan_item Type) {
-    vulkan_deletion_node* NewNode =
-        (vulkan_deletion_node*)ArenaPush(Arena, sizeof(vulkan_deletion_node));
+static void VulkanDeletionQueuePush(arena* __restrict Arena, vulkan_deletion_queue* __restrict Queue,
+                                    void* __restrict Item, vulkan_item Type) {
+    vulkan_deletion_node* NewNode = (vulkan_deletion_node*)ArenaPush(Arena, sizeof(vulkan_deletion_node));
     NewNode->Item = Item;
     NewNode->Type = Type;
     SllStackPush(Queue->Last, NewNode);
@@ -172,8 +170,8 @@ static void VulkanDeletionQueuePop(vulkan_context* VkCtx, vulkan_deletion_queue*
         } break;
         case VULKANITEM_DebugMessenger: {
             PFN_vkDestroyDebugUtilsMessengerEXT DestroyMessengerCallback =
-                (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-                    VkCtx->Instance, "vkDestroyDebugUtilsMessengerEXT");
+                (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(VkCtx->Instance,
+                                                                           "vkDestroyDebugUtilsMessengerEXT");
             DestroyMessengerCallback(VkCtx->Instance, *(VkDebugUtilsMessengerEXT*)Node->Item, 0);
         } break;
         case VULKANITEM_Insance: {
@@ -219,10 +217,10 @@ static void VulkanCopyToGpu(vulkan_context* VkCtx, VkBuffer Source, VkBuffer Des
     //    &VkCtx->TransientCommandBuffer);
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL
-DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT MessageType,
-              const VkDebugUtilsMessengerCallbackDataEXT* CallbackData, void* UserData) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT MessageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* CallbackData,
+                                                    void* UserData) {
     if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
         dprintf(2, TXT_UWHT "INFO" TXT_RST ": %s\n", CallbackData->pMessage);
     } else if (MessageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
@@ -241,8 +239,7 @@ static VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                              const VkAllocationCallbacks* pAllocator,
                                              VkDebugUtilsMessengerEXT* pDebugMessenger) {
     PFN_vkCreateDebugUtilsMessengerEXT func =
-        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance,
-                                                                  "vkCreateDebugUtilsMessengerEXT");
+        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     } else {
@@ -250,8 +247,7 @@ static VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
     }
 }
 
-static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
-                                 GLFWwindow* Window) {
+static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx, GLFWwindow* Window) {
     // NOTE(acol): Basic device properties like the name, type and supported Vulkan version
 
     ProfileFunction();
@@ -263,8 +259,7 @@ static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
     // NOTE(acol): support for optional features like texture compression and 64 bit floats
     VkPhysicalDeviceFeatures Features;
     vkGetPhysicalDeviceFeatures(Device, &Features);
-    if (!((Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
-          Features.geometryShader)) {
+    if (!((Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && Features.geometryShader)) {
         return 0;
     }
 
@@ -272,8 +267,8 @@ static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
     const char* RequiredExtensions[] = {VK_REQUIRED_DEVICE_EXTENSIONS};
     u32 ExtensionCount = 0;
     vkEnumerateDeviceExtensionProperties(Device, 0, &ExtensionCount, 0);
-    VkExtensionProperties* Extensions = (VkExtensionProperties*)ArenaPush(
-        Temp.Arena, sizeof(VkExtensionProperties) * ExtensionCount);
+    VkExtensionProperties* Extensions =
+        (VkExtensionProperties*)ArenaPush(Temp.Arena, sizeof(VkExtensionProperties) * ExtensionCount);
     vkEnumerateDeviceExtensionProperties(Device, 0, &ExtensionCount, Extensions);
     printf("Device Extensions\n");
     for (u32 i = 0; i < ExtensionCount; i++) {
@@ -337,8 +332,7 @@ static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
     //             VkCtx->PresentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
     //         }
     //     }
-    if (VkCtx->PresentMode != VK_PRESENT_MODE_FIFO_RELAXED_KHR)
-        VkCtx->PresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    if (VkCtx->PresentMode != VK_PRESENT_MODE_FIFO_RELAXED_KHR) VkCtx->PresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
     if (Capabilities.currentExtent.width != MaxU32) {
         VkCtx->SwapchainExtent = Capabilities.currentExtent;
@@ -355,8 +349,7 @@ static b32 IsDeviceGucciAndSetup(VkPhysicalDevice Device, vulkan_context* VkCtx,
     // sounds like it should reduce complexity for me a bit as long as I stay at speed so will go
     // with that
     u32 ImageCount = ClampBot(Capabilities.minImageCount, 2);
-    if (Capabilities.maxImageCount > 0)
-        ImageCount = ClampTop(ImageCount, Capabilities.maxImageCount);
+    if (Capabilities.maxImageCount > 0) ImageCount = ClampTop(ImageCount, Capabilities.maxImageCount);
     VkCtx->ImageCount = ImageCount;
 
     vkGetPhysicalDeviceMemoryProperties(Device, &VkCtx->MemoryProperties);
@@ -381,10 +374,10 @@ static void RecreateSwapchain(vulkan_context* VkCtx) {
         glfwWaitEvents();
     }
 
-    VkCtx->SwapchainExtent.width = Clamp(VkCtx->Capabilities.minImageExtent.width, Width,
-                                         VkCtx->Capabilities.maxImageExtent.width);
-    VkCtx->SwapchainExtent.height = Clamp(VkCtx->Capabilities.minImageExtent.height, Height,
-                                          VkCtx->Capabilities.maxImageExtent.height);
+    VkCtx->SwapchainExtent.width =
+        Clamp(VkCtx->Capabilities.minImageExtent.width, Width, VkCtx->Capabilities.maxImageExtent.width);
+    VkCtx->SwapchainExtent.height =
+        Clamp(VkCtx->Capabilities.minImageExtent.height, Height, VkCtx->Capabilities.maxImageExtent.height);
 
     VkSwapchainCreateInfoKHR SwapchainInfo = {};
     SwapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -425,8 +418,7 @@ static void RecreateSwapchain(vulkan_context* VkCtx) {
     ImageViewInfo.subresourceRange.layerCount = 1;
     for (u32 i = 0; i < VkCtx->ImageCount; i++) {
         ImageViewInfo.image = VkCtx->Images[i];
-        if (vkCreateImageView(VkCtx->Device, &ImageViewInfo, 0, &VkCtx->ImageViews[i]) !=
-            VK_SUCCESS) {
+        if (vkCreateImageView(VkCtx->Device, &ImageViewInfo, 0, &VkCtx->ImageViews[i]) != VK_SUCCESS) {
             dprintf(2, "Failed to create image view %u\n", i);
             exit(1);
         }
@@ -453,9 +445,8 @@ static u32 GetSuitableMemoryIndex(vulkan_context* VkCtx, VkMemoryPropertyFlags P
     exit(1);
 }
 
-static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer,
-                               VkDeviceMemory* BufferMemory, u64 Size,
-                               VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags) {
+static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer, VkDeviceMemory* BufferMemory,
+                               u64 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags) {
     ProfileFunction();
     // NOTE(acol): memory allocation in gpu
     VkBufferCreateInfo BufferInfo = {};
@@ -483,8 +474,7 @@ static void CreateVulkanBuffer(vulkan_context* VkCtx, VkBuffer* Buffer,
         dprintf(2, "Failed to allocate buffer memory\n");
         exit(1);
     }
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)BufferMemory,
-                            VULKANITEM_Memory);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)BufferMemory, VULKANITEM_Memory);
 
     vkBindBufferMemory(VkCtx->Device, *Buffer, *BufferMemory, 0);
 }
@@ -562,8 +552,7 @@ static void RecreatePipeleine(vulkan_context* VkCtx) {
     ShaderStages[0] = VertShaderInfo;
     ShaderStages[1] = FragShaderInfo;
 
-    VkDynamicState* DynamicStates =
-        (VkDynamicState*)ArenaPush(ShaderArena, sizeof(VkDynamicState) * 3);
+    VkDynamicState* DynamicStates = (VkDynamicState*)ArenaPush(ShaderArena, sizeof(VkDynamicState) * 3);
     DynamicStates[0] = VK_DYNAMIC_STATE_VIEWPORT;
     DynamicStates[1] = VK_DYNAMIC_STATE_SCISSOR;
     DynamicStates[2] = VK_DYNAMIC_STATE_VERTEX_INPUT_EXT;
@@ -638,8 +627,7 @@ static void RecreatePipeleine(vulkan_context* VkCtx) {
     PipelineLayoutInfo.pSetLayouts = 0;
     PipelineLayoutInfo.pushConstantRangeCount = 1;
     PipelineLayoutInfo.pPushConstantRanges = &PushConstantRange;
-    if (vkCreatePipelineLayout(VkCtx->Device, &PipelineLayoutInfo, 0, &VkCtx->PipelineLayout) !=
-        VK_SUCCESS) {
+    if (vkCreatePipelineLayout(VkCtx->Device, &PipelineLayoutInfo, 0, &VkCtx->PipelineLayout) != VK_SUCCESS) {
         dprintf(2, "Failed to create pipeline layout\n");
         exit(1);
     }
@@ -681,9 +669,8 @@ static void RecreatePipeleine(vulkan_context* VkCtx) {
 int main(void) {
     BeginProfile();
 
-    arena_alloc_params AllocParams = {.Flags = ARENA_NoChainGrow,
-                                      .ReserveSize = MB(100),
-                                      .CommitSize = ARENA_DEFAULT_RESERVE_SIZE};
+    arena_alloc_params AllocParams = {
+        .Flags = ARENA_NoChainGrow, .ReserveSize = MB(100), .CommitSize = ARENA_DEFAULT_RESERVE_SIZE};
     GlobalArena = ArenaAlloc(AllocParams);
 
     vulkan_context VkCtx = {};
@@ -693,8 +680,7 @@ int main(void) {
     ShaderArena = ArenaAlloc(AllocParams);
     TestDeletionArena = ArenaAlloc(AllocParams);
 
-    DeletionQueue =
-        (vulkan_deletion_queue*)ArenaPush(TestDeletionArena, sizeof(vulkan_deletion_queue));
+    DeletionQueue = (vulkan_deletion_queue*)ArenaPush(TestDeletionArena, sizeof(vulkan_deletion_queue));
 
     /* ==============================================================================================
 
@@ -743,8 +729,8 @@ int main(void) {
     // Get number of extensions, commit a buffer and go through them
     u32 ExtensionCount = 0;
     vkEnumerateInstanceExtensionProperties(0, &ExtensionCount, 0);
-    VkExtensionProperties* ExtensionProperties = (VkExtensionProperties*)ArenaPush(
-        GlobalArena, sizeof(VkExtensionProperties) * ExtensionCount);
+    VkExtensionProperties* ExtensionProperties =
+        (VkExtensionProperties*)ArenaPush(GlobalArena, sizeof(VkExtensionProperties) * ExtensionCount);
     vkEnumerateInstanceExtensionProperties(0, &ExtensionCount, ExtensionProperties);
     printf("Available extensions\n");
     for (u32 i = 0; i < ExtensionCount; i++) {
@@ -788,8 +774,7 @@ int main(void) {
 
     // NOTE(acol): instance extensiosn
     const char** Extensions = (const char**)ArenaPush(
-        GlobalArena,
-        sizeof(*GlfwExtensions) * (GlfwExtensionCount + ArrayCount(RequiredInstanceExtensions)));
+        GlobalArena, sizeof(*GlfwExtensions) * (GlfwExtensionCount + ArrayCount(RequiredInstanceExtensions)));
     MemoryCopyTyped(Extensions, GlfwExtensions, GlfwExtensionCount);
     MemoryCopyTyped(Extensions + GlfwExtensionCount, RequiredInstanceExtensions,
                     ArrayCount(RequiredInstanceExtensions));
@@ -798,10 +783,9 @@ int main(void) {
 
     VkDebugUtilsMessengerCreateInfoEXT MessengerInfo = {};
     MessengerInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    MessengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    MessengerInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     MessengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -817,8 +801,7 @@ int main(void) {
         return 1;
     }
 
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Instance,
-                            VULKANITEM_Insance);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Instance, VULKANITEM_Insance);
 
 #if VK_VALIDATE
     // NOTE(acol): this shitty api doesnt even give you the function call to create a callback so
@@ -846,8 +829,7 @@ int main(void) {
         return 1;
     }
 
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Surface,
-                            VULKANITEM_Surface);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Surface, VULKANITEM_Surface);
 
     // NOTE(acol): select physical device
     u32 DeviceCount = 0;
@@ -874,17 +856,15 @@ int main(void) {
     u32 QueueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(VkCtx.PhysicalDevice, &QueueFamilyCount, 0);
 
-    VkQueueFamilyProperties* QueueFamilies = (VkQueueFamilyProperties*)ArenaPush(
-        GlobalArena, sizeof(VkQueueFamilyProperties) * QueueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(VkCtx.PhysicalDevice, &QueueFamilyCount,
-                                             QueueFamilies);
+    VkQueueFamilyProperties* QueueFamilies =
+        (VkQueueFamilyProperties*)ArenaPush(GlobalArena, sizeof(VkQueueFamilyProperties) * QueueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(VkCtx.PhysicalDevice, &QueueFamilyCount, QueueFamilies);
 
     u32 GraphicsQueueIndex = 0;
     for (u32 i = 0; i < QueueFamilyCount; i++) {
         VkBool32 CanPresent = {};
         if ((QueueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-            (vkGetPhysicalDeviceSurfaceSupportKHR(VkCtx.PhysicalDevice, i, VkCtx.Surface,
-                                                  &CanPresent))) {
+            (vkGetPhysicalDeviceSurfaceSupportKHR(VkCtx.PhysicalDevice, i, VkCtx.Surface, &CanPresent))) {
             GraphicsQueueIndex = i;
             break;
         }
@@ -936,8 +916,7 @@ int main(void) {
         dprintf(2, "Failed to create logical device\n");
         return 1;
     }
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Device,
-                            VULKANITEM_Device);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Device, VULKANITEM_Device);
 
     vkGetDeviceQueue(VkCtx.Device, GraphicsQueueIndex, 0, &VkCtx.GraphicsQueue);
 
@@ -968,8 +947,7 @@ int main(void) {
         dprintf(2, "Failed to creat swapchain\n");
         return 1;
     }
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Swapchain,
-                            VULKANITEM_Swapchain);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.Swapchain, VULKANITEM_Swapchain);
 
     ArenaReset(GlobalArena);
     // NOTE(acol): This feels kinda weird cause I shouldn't pop it off the arena. Maybe I need to
@@ -996,8 +974,7 @@ int main(void) {
     ImageViewInfo.subresourceRange.layerCount = 1;
     for (u32 i = 0; i < VkCtx.ImageCount; i++) {
         ImageViewInfo.image = VkCtx.Images[i];
-        if (vkCreateImageView(VkCtx.Device, &ImageViewInfo, 0, &VkCtx.ImageViews[i]) !=
-            VK_SUCCESS) {
+        if (vkCreateImageView(VkCtx.Device, &ImageViewInfo, 0, &VkCtx.ImageViews[i]) != VK_SUCCESS) {
             dprintf(2, "Failed to create image view %u\n", i);
             return 1;
         }
@@ -1082,8 +1059,7 @@ int main(void) {
 
     VkPipelineShaderStageCreateInfo ShaderStages[2] = {VertShaderInfo, FragShaderInfo};
 
-    VkDynamicState* DynamicStates =
-        (VkDynamicState*)ArenaPush(GlobalArena, sizeof(VkDynamicState) * 3);
+    VkDynamicState* DynamicStates = (VkDynamicState*)ArenaPush(GlobalArena, sizeof(VkDynamicState) * 3);
     DynamicStates[0] = VK_DYNAMIC_STATE_VIEWPORT;
     DynamicStates[1] = VK_DYNAMIC_STATE_SCISSOR;
     DynamicStates[2] = VK_DYNAMIC_STATE_VERTEX_INPUT_EXT;
@@ -1165,8 +1141,7 @@ int main(void) {
     PipelineLayoutInfo.pSetLayouts = 0;
     PipelineLayoutInfo.pushConstantRangeCount = 1;
     PipelineLayoutInfo.pPushConstantRanges = &PushConstantRange;
-    if (vkCreatePipelineLayout(VkCtx.Device, &PipelineLayoutInfo, 0, &VkCtx.PipelineLayout) !=
-        VK_SUCCESS) {
+    if (vkCreatePipelineLayout(VkCtx.Device, &PipelineLayoutInfo, 0, &VkCtx.PipelineLayout) != VK_SUCCESS) {
         dprintf(2, "Failed to create pipeline layout\n");
         return 1;
     }
@@ -1229,8 +1204,7 @@ int main(void) {
     VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.CommandPool,
                             VULKANITEM_CommandPool);
 
-    if (vkCreateCommandPool(VkCtx.Device, &PoolInfo, 0, &VkCtx.TransientCommandPool) !=
-        VK_SUCCESS) {
+    if (vkCreateCommandPool(VkCtx.Device, &PoolInfo, 0, &VkCtx.TransientCommandPool) != VK_SUCCESS) {
         dprintf(2, "Failed to create commnad pool\n");
         return 1;
     }
@@ -1290,8 +1264,7 @@ int main(void) {
         dprintf(2, "Failed to create fence\n");
         return 1;
     }
-    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.InFlightFence,
-                            VULKANITEM_Fence);
+    VulkanDeletionQueuePush(TestDeletionArena, DeletionQueue, (void*)&VkCtx.InFlightFence, VULKANITEM_Fence);
 
     /* ==============================================================================================
 
@@ -1330,15 +1303,6 @@ int main(void) {
 
     // NOTE(acol): Dynamic vertex stuff
     tutorial_vertex Vertices[] = {
-        //        {{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        //        {{-1.0f, 0.0f, 0.0f}, {1.0f, 0.8f, 0.8f}},
-        //
-        //        {{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        //        {{0.0f, -1.0f, 0.0f}, {0.8f, 1.0f, 0.8f}},
-        //
-        //        {{0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        //        {{0.0f, 0.0f, -1.0f}, {0.8f, 0.8f, 1.0f}}
-
         // NOTE(acol): TRIANG1
         {{0.0f, -0.577f, 0.0f}, {1.0f, 0.0f, 0.0f}},
         {{-0.5f, 0.289f, 0.0f}, {1.0f, 0.0f, 0.0f}},
@@ -1366,8 +1330,8 @@ int main(void) {
     BindingDescription.divisor = 1;
 
     VkVertexInputAttributeDescription2EXT* AttributeDescriptions =
-        (VkVertexInputAttributeDescription2EXT*)ArenaPush(
-            GlobalArena, 2 * sizeof(VkVertexInputAttributeDescription));
+        (VkVertexInputAttributeDescription2EXT*)ArenaPush(GlobalArena,
+                                                          2 * sizeof(VkVertexInputAttributeDescription));
 
     AttributeDescriptions[0].sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT;
     AttributeDescriptions[0].binding = 0;
@@ -1431,8 +1395,8 @@ int main(void) {
             FileFragmentShader.LastModified = FileInfoFragment.LastModified;
         }
 
-        VkResult Res = vkAcquireNextImageKHR(VkCtx.Device, VkCtx.Swapchain, MaxU64,
-                                             VkCtx.ImageSemaphore, VK_NULL_HANDLE, &ImageIndex);
+        VkResult Res = vkAcquireNextImageKHR(VkCtx.Device, VkCtx.Swapchain, MaxU64, VkCtx.ImageSemaphore,
+                                             VK_NULL_HANDLE, &ImageIndex);
 
         if (Unlikely(Res != VK_SUCCESS)) {
             if (Res == VK_ERROR_OUT_OF_DATE_KHR || Res == VK_SUBOPTIMAL_KHR) {
@@ -1511,12 +1475,9 @@ int main(void) {
         ImageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         ImageBarriers[0].image = VkCtx.Images[ImageIndex];
         ImageBarriers[0].srcAccessMask = 0;  // memory op to wait for
-        ImageBarriers[0].srcStageMask =
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait for
-        ImageBarriers[0].dstAccessMask =
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait on
-        ImageBarriers[0].dstStageMask =
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait on
+        ImageBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait for
+        ImageBarriers[0].dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait on
+        ImageBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait on
         ImageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         ImageBarriers[0].newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
         ImageBarriers[0].subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1528,11 +1489,9 @@ int main(void) {
         // NOTE(acol): transform swapchain image from pipleine output to present format
         ImageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         ImageBarriers[1].image = VkCtx.Images[ImageIndex];
-        ImageBarriers[1].srcAccessMask =
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait for
-        ImageBarriers[1].srcStageMask =
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;           // stage to wait for
-        ImageBarriers[1].dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;  // memory op to wait on
+        ImageBarriers[1].srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;  // memory op to wait for
+        ImageBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;  // stage to wait for
+        ImageBarriers[1].dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;            // memory op to wait on
         ImageBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;  // stage to wait on
         ImageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
         ImageBarriers[1].newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -1550,8 +1509,7 @@ int main(void) {
         vkCmdPipelineBarrier2(VkCtx.CommandBuffer, &SourceImageDependency);
 
         PushConstants.Time = (f32)(__rdtsc() - TimeStart) / (RdtscFrequency / 1000.0f);
-        PushConstants.Resolution = {(f32)VkCtx.SwapchainExtent.width,
-                                    (f32)VkCtx.SwapchainExtent.height};
+        PushConstants.Resolution = {(f32)VkCtx.SwapchainExtent.width, (f32)VkCtx.SwapchainExtent.height};
 
         vkCmdPushConstants(VkCtx.CommandBuffer, VkCtx.PipelineLayout,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -1561,15 +1519,13 @@ int main(void) {
         vkCmdBeginRendering(VkCtx.CommandBuffer, &RenderInfo);
 
         // NOTE(acol): Resolve dynamic state of the pipeline
-        vkCmdSetVertexInputEXT(VkCtx.CommandBuffer, 1, &BindingDescription, 2,
-                               AttributeDescriptions);
+        vkCmdSetVertexInputEXT(VkCtx.CommandBuffer, 1, &BindingDescription, 2, AttributeDescriptions);
         vkCmdSetViewport(VkCtx.CommandBuffer, 0, 1, &Viewport);
         vkCmdSetScissor(VkCtx.CommandBuffer, 0, 1, &Scissor);
         vkCmdSetPrimitiveTopology(VkCtx.CommandBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
         // NOTE(acol): Bind to pipeline
-        vkCmdBindPipeline(VkCtx.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          VkCtx.GraphicsPipeline);
+        vkCmdBindPipeline(VkCtx.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VkCtx.GraphicsPipeline);
 
         // NOTE(acol): Vertexes to draw and their indexes to avoid repeating, this is in GPU memory
         vkCmdBindVertexBuffers(VkCtx.CommandBuffer, 0, 1, &VkCtx.VertexBuffer, Offsets);

@@ -12,12 +12,12 @@
 
 
 
-(https://docs.vulkan.org/samples/latest/samples/extensions/buffer_device_address/README.html)[pointers for shaders]
+[pointers for shaders](https://docs.vulkan.org/samples/latest/samples/extensions/buffer_device_address/README.html)
 
-(https://docs.vulkan.org/samples/latest/samples/extensions/descriptor_indexing/README.html)[dynamic indexing for shaders]
+[dynamic indexing for shaders](https://docs.vulkan.org/samples/latest/samples/extensions/descriptor_indexing/README.html)
 
 demotetohelperinvocation 
 scalarblocklayout 
 timelinesemaphores
 
-need to use resolve attachments and not vkCmdResolveIamge() for multisampling 
+need to use resolve attachments and not vkCmdResolveImage() for multisampling 

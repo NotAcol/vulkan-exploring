@@ -40,16 +40,18 @@ typedef struct string_join {
 #define StringTyped(S) \
     (string) { (u8 *)(S), sizeof(*(S)) }
 
-static u64 CstringSize(u8 *Cstr);
-static string StringFromCstring(u8 *Cstr);
+static u64 CstringLength(u8 *Cstr);
+static string StringFromCstring(char *Cstr);
 static string StringPrefix(string String, u64 Size);
 static string StringPostfix(string String, u64 Size);
 static string StringChop(string String, u64 Ammount);
 static string StringSkip(string String, u64 Ammount);
 static string StringSubstringWindow(string String, u64 First, u64 Last);
 static string StringSubstringSize(string String, u64 First, u64 Size);
+
 static void StringListPushExplicit(string_list *List, string String, string_node *Node);
 static void StringListPush(arena *Arena, string_list *List, string String);
+
 static string StringJoin(arena *Arena, string_list *List, string_join *StringJoin = 0);
 static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters, u32 Length);
 static string StringPushfv(arena *Arena, char *Fmt, va_list Args);

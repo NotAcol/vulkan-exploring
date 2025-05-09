@@ -1,8 +1,10 @@
 -DENABLE_ASSERT
+-DPROFILE=1
+-DVK_VALIDATE=1
+-DARENA_LOGGING=0
 -O2
 -mavx2
 -mfma
--lc++abi 
 -fno-exceptions 
 -fno-rtti 
 -pthread
@@ -13,3 +15,6 @@
 -freciprocal-math
 -fassociative-math
 -fuse-ld=lld
+-lwayland-client 
+-lglfw
+-lvulkan

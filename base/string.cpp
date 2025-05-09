@@ -126,7 +126,7 @@ static string StringJoin(arena *Arena, string_list *List, string_join *Join) {
     return Ret;
 }
 
-static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters, u32 Length) {
+static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters, u32 SplitCharsCount) {
     // NOTE(acol): This is slow as shit if it gets used often might have to optimize
     ProfileFunction();
     string_list List = {};
@@ -137,7 +137,7 @@ static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters,
 
     for (; Current < LastByte; Current++) {
         b32 IsSplit = 0;
-        for (u32 i = 0; i < Length; i++) {
+        for (u32 i = 0; i < SplitCharsCount; i++) {
             if (*Current == SplitCharacters[i]) {
                 IsSplit = 1;
                 break;
@@ -160,7 +160,9 @@ static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters,
 #include <stdio.h>
 #include <stdarg.h>
 
-// TODO(acol): Really should make a custom vsnprintf cause it's slow af
+// TODO(acol): Really should make a custom vsnprintf cause it's slow af, also it should
+// quickly calc the size to push when given null pointer instead of buffer so I dont
+// have to do the entire pushing 1024 randomly at the start and then popping it
 static string StringPushfv(arena *Arena, char *Fmt, va_list Args) {
     ProfileFunction();
 
