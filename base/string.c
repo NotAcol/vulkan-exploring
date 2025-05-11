@@ -20,51 +20,51 @@ AsanDisable static u64 CstringSize(char *Cstr) {
     }
     return Size;
 }
-static string8 String8FromCstring8(char *Cstr);
-u64 Size = CstringSize(Cstr);
-string String = {Cstr, Size};
-return String;
+static string8 String8FromCstring(char *Cstr) {
+    u64 Size = CstringSize(Cstr);
+    string8 String = {(u8 *)Cstr, Size};
+    return String;
 }
 
 static string8 String8FromRange(u8 *First, u8 *Last) {
-    string Ret = {First, (u64)Last - (u64)First};
+    string8 Ret = {First, (u64)Last - (u64)First};
     return Ret;
 }
 
 static string8 String8Prefix(string8 String, u64 Size) {
     Size = ClampTop(Size, String.Size);
-    string Ret = {String.Str, Size};
+    string8 Ret = {String.Str, Size};
     return Ret;
 }
 
 static string8 String8Postfix(string8 String, u64 Size) {
     Size = ClampTop(Size, String.Size);
     u8 *Start = String.Str + (String.Size - Size);
-    string Ret = {Start, Size};
+    string8 Ret = {Start, Size};
     return Ret;
 }
 
 static string8 String8Chop(string8 String, u64 Ammount) {
     Ammount = ClampTop(Ammount, String.Size);
-    string Ret = {String.Str, String.Size - Ammount};
+    string8 Ret = {String.Str, String.Size - Ammount};
     return Ret;
 }
 
 static string8 String8Skip(string8 String, u64 Ammount) {
     Ammount = ClampTop(Ammount, String.Size);
-    string Ret = {String.Str + Ammount, String.Size - Ammount};
+    string8 Ret = {String.Str + Ammount, String.Size - Ammount};
     return Ret;
 }
 
-static string8 String8SubstringWindow(string8 String, u64 First, u64 Last);
-Range.Min = ClampTop(Range.Min, String.Size);
-Range.Max = ClampTop(Range.Max, String.Size);
-string Ret = {String.Str + Range.Min, Range.Max - Range.Min};
-return Ret;
+static string8 String8SubstringWindow(string8 String, v2_u64 Range) {
+    Range.Min = ClampTop(Range.Min, String.Size);
+    Range.Max = ClampTop(Range.Max, String.Size);
+    string8 Ret = {String.Str + Range.Min, Range.Max - Range.Min};
+    return Ret;
 }
 
 static string8 PushString8Copy(arena *Arena, string8 String) {
-    string Ret = {};
+    string8 Ret = {0};
     // NOTE(acol): +1 to null terminate it for printing or passing to OS
     Ret.Str = (u8 *)ArenaPush(Arena, String.Size + 1);
     Ret.Size = String.Size;
@@ -98,7 +98,7 @@ static string8 PushString8fv(arena *Arena, char *Fmt, va_list Args) {
     u8 *Buffer = (u8 *)ArenaPush(Arena, BufferSize);
     u64 ActualSize = vsnprintf((char *)Buffer, BufferSize, Fmt, Args);
 
-    string8 Ret = {};
+    string8 Ret = {0};
     if (ActualSize < BufferSize) {
         ArenaPop(Arena, BufferSize - ActualSize - 1);
     } else {
@@ -106,13 +106,13 @@ static string8 PushString8fv(arena *Arena, char *Fmt, va_list Args) {
         Buffer = (u8 *)ArenaPush(Arena, ActualSize + 1);
         ActualSize = vsnprintf((char *)Buffer, ActualSize + 1, Fmt, Args2);
     }
-    Ret = {Buffer, ActualSize};
+    Ret = (string8){Buffer, ActualSize};
     va_end(Args2);
     return Ret;
 }
 
 static string8 PushString8f(arena *Arena, char *Fmt, ...) {
-    val_list Args;
+    va_list Args;
     va_start(Args, Fmt);
     string8 Ret = PushString8fv(Arena, Fmt, Args);
     va_end(Args);
@@ -141,12 +141,12 @@ static string8_node *String8ListPushf(arena *Arena, string8_list *List, char *Fm
     va_start(Args, Fmt);
     string8 String = PushString8fv(Arena, Fmt, Args);
     va_end(Args);
-    string8_list *Node = String8ListPush(Arena, List, String);
+    string8_node *Node = String8ListPush(Arena, List, String);
     return Node;
 }
 
-static string8_list String8Split(arena *Arena, string8 String, u8 *SplitCharacters, u32 Length) {
-    string8_list List = {};
+static string8_list String8Split(arena *Arena, string8 String, u8 *SplitCharacters, u32 SplitCharsCount) {
+    string8_list List = {0};
 
     u8 *Current = String.Str;
     u8 *WordStart = Current;
@@ -169,7 +169,7 @@ static string8_list String8Split(arena *Arena, string8 String, u8 *SplitCharacte
         }
     }
     if (WordStart < Current) {
-        String8ListPush(Arena, &List, StringFromRange(WordStart, Current));
+        String8ListPush(Arena, &List, String8FromRange(WordStart, Current));
     }
     return List;
 }
@@ -180,10 +180,10 @@ static string8 String8ListJoin(arena *Arena, string8_list *List, string8_join *O
     if (OptionalStringJoin) {
         MemoryCopyStruct(&Join, OptionalStringJoin);
     }
-    Ret.Size = Join->Pre.Size + Join->Post.Size +
-               Join->Sep.Size * (List->NodeCount ? List->NodeCount - 1 : 0) + List->TotalSize;
+    Ret.Size = Join.Pre.Size + Join.Post.Size + Join.Sep.Size * (List->NodeCount ? List->NodeCount - 1 : 0) +
+               List->TotalSize;
 
-    u8 *Ptr = Ret.Str = (u8 *)ArenaPushNoZero(Arena, Size + 1);
+    u8 *Ptr = Ret.Str = (u8 *)ArenaPushNoZero(Arena, Ret.Size + 1);
 
     MemoryCopy(Ptr, Join.Pre.Str, Join.Pre.Size);
     Ptr += Join.Pre.Size;

@@ -1,5 +1,3 @@
-static u64 ReadCpuTimer(void) { return __rdtsc(); }
-
 static u64 EstimateBlockTimerFreq(void) {
     u64 MsToWait = 100;
 
@@ -19,38 +17,37 @@ static u64 EstimateBlockTimerFreq(void) {
 }
 
 #if PROFILE
+static void ProfileBandwidthStart_(profile_block* restrict Block, const char* restrict Label, u32 AnchorIndex,
+                                   u64 ByteCount) {
+    Block->ParentIndex = GlobalProfilerParent;
+    Block->Label = Label;
+    Block->AnchorIndex = AnchorIndex;
+    Block->ByteCount = ByteCount;
 
-profile_block::profile_block(const char *Label_, u32 AnchorIndex_, u64 ByteCount_) {
-    AnchorIndex = AnchorIndex_;
-    ParentIndex = GlobalProfilerParent;
+    profile_anchor* Anchor = GlobalAnchors + AnchorIndex;
+    Block->OldTSCElapsedInclusive = Anchor->TSCElapsedInclusive;
+
     GlobalProfilerParent = AnchorIndex;
-    Label = Label_;
-    ByteCount = ByteCount_;
 
-    profile_anchor *Anchor = GlobalAnchors + AnchorIndex;
-    OldTSCElapsedInclusive = Anchor->TSCElapsedInclusive;
-
-    TSCStart = READ_BLOCK_TIMER();
+    Block->TSCStart = READ_BLOCK_TIMER();
 }
-profile_block::~profile_block(void) {
-    u64 Elapsed = READ_BLOCK_TIMER() - TSCStart;
-    GlobalProfilerParent = ParentIndex;
+static void ProfileBandwidthEnd_(profile_block* Block) {
+    u64 Elapsed = READ_BLOCK_TIMER() - Block->TSCStart;
+    GlobalProfilerParent = Block->ParentIndex;
 
-    profile_anchor *Anchor = GlobalAnchors + AnchorIndex;
-    profile_anchor *Parena = GlobalAnchors + ParentIndex;
+    profile_anchor* Parent = GlobalAnchors + Block->ParentIndex;
+    profile_anchor* Anchor = GlobalAnchors + Block->AnchorIndex;
 
-    // NOTE(acol): overwriting the deeper recursion calls
-    Anchor->TSCElapsedInclusive = OldTSCElapsedInclusive + Elapsed;
-
+    Anchor->TSCElapsedInclusive = Block->OldTSCElapsedInclusive + Elapsed;
+    Parent->TSCElapsedExclusive -= Elapsed;
     Anchor->TSCElapsedExclusive += Elapsed;
-    Parena->TSCElapsedExclusive -= Elapsed;
-    Anchor->ProcessedBytes += ByteCount;
-
-    Anchor->Label = Label;
+    Anchor->ProcessedBytes += Block->ByteCount;
     ++Anchor->HitCount;
+
+    Anchor->Label = Block->Label;
 }
 
-static void PrintTimeElapsed(u64 TotalTSCElapsed, u64 TimerFrequency, profile_anchor *Anchor) {
+static void PrintTimeElapsed(u64 TotalTSCElapsed, u64 TimerFrequency, profile_anchor* Anchor) {
     f64 PercentTime = 100.0 * ((f64)Anchor->TSCElapsedExclusive / (f64)TotalTSCElapsed);
 
     printf("  " TXT_BLU "%s[" TXT_WHT "%llu" TXT_BLU "]: " TXT_WHT "%llu (" TXT_RED "%.2f%%" TXT_WHT,
@@ -73,14 +70,14 @@ static void PrintTimeElapsed(u64 TotalTSCElapsed, u64 TimerFrequency, profile_an
 
 static void PrintAnchorData(u64 TotalTSCElapsed, u64 TimerFrequency) {
     for (u32 i = 0; i < ArrayCount(GlobalAnchors); i++) {
-        profile_anchor *Anchor = GlobalAnchors + i;
+        profile_anchor* Anchor = GlobalAnchors + i;
         if (Anchor->TSCElapsedInclusive) {
             PrintTimeElapsed(TotalTSCElapsed, TimerFrequency, Anchor);
         }
     }
 }
 
-#endif  // PROFILE
+#endif
 
 static void BeginProfile(void) { GlobalProfiler.StartTSC = READ_BLOCK_TIMER(); }
 

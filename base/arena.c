@@ -152,7 +152,7 @@ static void *ArenaPushAligned(arena *Arena, u64 Size, u64 Align) {
 #if ARENA_LOGGING
     dprintf(2, "Arena Pushed: %llu\n", Size);
 #endif
-    void *Ret = ArenaPushNoZero(Arena, Size, Align);
+    void *Ret = ArenaPushNoZeroAligned(Arena, Size, Align);
     MemoryZero(Ret, Size);
     return Ret;
 }
@@ -201,8 +201,6 @@ static void ArenaPop(arena *Arena, u64 Size) {
         ArenaPopTo(Arena, NewPos);
     }
 }
-
-// TODO(acol): Maybe make these constructor destructor to make it more ergonomic ?
 
 static temp_arena TempBegin(arena *Arena) {
     u64 CurrentPos = ArenaPos(Arena);

@@ -41,6 +41,15 @@ static void OsRelease(void *Ptr, u64 Size);
 static void *OsReserveLarge(u64 Size);
 static b32 OsCommitLarge(void *Ptr, u64 Size);
 
+static os_file_handle OsSharedMemoryAlloc(string8 Name, u64 Size);
+static os_file_handle OsSharedMemoryOpen(string8 Name);
+static void OsSharedMemoryClose(os_file_handle Handle);
+static void *OsSharedMemoryMap(os_file_handle Handle, v2_u64 MapWindow);
+static void OsSharedMemoryUnmap(os_file_handle Handle, void *Ptr, v2_u64 MapWindow);
+
+static void *RingBufferAlloc(string8 Name, u64 Size);
+static void RingBufferRelease(void *RingBuffer, u64 RingSize);
+
 static os_file_handle OsFileOpen(string8 Path, os_access_flags Flags);
 static void OsFileClose(os_file_handle File);
 static b32 OsFileDelete(string8 Path);

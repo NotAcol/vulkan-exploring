@@ -1,61 +1,59 @@
 #ifndef STRING_H
 #define STRING_H
 
-/*  =====================================================================================
-
-        NOTE(acol): String helpers, not optimized at all this is just convenience
-
-    ===================================================================================== */
-
 // NOTE(acol): To be used as immutable
-typedef struct string {
-    u8 *Str = 0;
-    u64 Size = 0;
-} string;
+typedef struct string8 {
+    u8 *Str;
+    u64 Size;
+} string8;
 
-typedef struct string_node {
-    struct string_node *Next;
-    string String;
-} string_node;
+typedef struct string8_node {
+    struct string8_node *Next;
+    string8 String;
+} string8_node;
 
-typedef struct string_list {
-    struct string_node *First = 0;
-    struct string_node *Last = 0;
-    u64 NodeCount = 0;
-    u64 TotalSize = 0;
-} string_list;
+typedef struct string8_list {
+    struct string8_node *First;
+    struct string8_node *Last;
+    u64 NodeCount;
+    u64 TotalSize;
+} string8_list;
 
-typedef struct string_array {
-    string *V;
+typedef struct string8_array {
+    string8 *V;
     u64 Count;
-} string_array;
+} string8_array;
 
-typedef struct string_join {
-    string Pre;
-    string Mid;
-    string Post;
-} string_join;
+typedef struct string8_join {
+    string8 Pre;
+    string8 Sep;
+    string8 Post;
+} string8_join;
 
-#define StringLit(S) (string){(u8 *)(S), sizeof(S) - 1}
-#define StringTyped(S) \
-    (string) { (u8 *)(S), sizeof(*(S)) }
+#define String8Lit(S) (string8){(u8 *)(S), sizeof(S) - 1}
+#define String8Typed(S) \
+    (string8) { (u8 *)(S), sizeof(*(S)) }
 
-static u64 CstringLength(u8 *Cstr);
-static string StringFromCstring(char *Cstr);
-static string StringPrefix(string String, u64 Size);
-static string StringPostfix(string String, u64 Size);
-static string StringChop(string String, u64 Ammount);
-static string StringSkip(string String, u64 Ammount);
-static string StringSubstringWindow(string String, u64 First, u64 Last);
-static string StringSubstringSize(string String, u64 First, u64 Size);
+static u64 Cstring8Length(char *Cstr);
+static string8 String8FromCstring(char *Cstr);
+static string8 String8FromRange(u8 *First, u8 *Last);
 
-static void StringListPushExplicit(string_list *List, string String, string_node *Node);
-static void StringListPush(arena *Arena, string_list *List, string String);
+static string8 String8Prefix(string8 String, u64 Size);
+static string8 String8Postfix(string8 String, u64 Size);
+static string8 String8Chop(string8 String, u64 Ammount);
+static string8 String8Skip(string8 String, u64 Ammount);
+static string8 String8SubstringWindow(string8 String, v2_u64 Range);
 
-static string StringJoin(arena *Arena, string_list *List, string_join *StringJoin = 0);
-static string_list StringSplit(arena *Arena, string String, u8 *SplitCharacters, u32 Length);
-static string StringPushfv(arena *Arena, char *Fmt, va_list Args);
-static string StringPushf(arena *Arena, char *Fmt, ...);
-static void StringListPushf(arena *Arena, string_list *List, char *Fmt, ...);
+static string8 PushString8Copy(arena *Arena, string8 String);
+static string8 PushString8Cat(arena *Arena, string8 String1, string8 String2);
+static string8 PushString8fv(arena *Arena, char *Fmt, va_list Args);
+static string8 PushString8f(arena *Arena, char *Fmt, ...);
 
+// TODO(acol): the list stuff I could add a lot more with pushing in the middle or front and blah blah
+static string8_node *String8ListPushNode(string8_list *List, string8 String, string8_node *Node);
+static string8_node *String8ListPush(arena *Arena, string8_list *List, string8 String);
+static string8_node *String8ListPushf(arena *Arena, string8_list *List, char *Fmt, ...);
+
+static string8 String8ListJoin(arena *Arena, string8_list *List, string8_join *OptionalStringJoin);
+static string8_list String8Split(arena *Arena, string8 String, u8 *SplitCharacters, u32 SplitCharsCount);
 #endif  // STRING_H

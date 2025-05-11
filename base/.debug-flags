@@ -8,6 +8,7 @@
 -Wextra
 -Wno-unused-function
 -Wno-missing-braces
+-Wno-excess-initializers
 -pedantic
 -pthread
 -fuse-ld=lld 

@@ -35,10 +35,11 @@ static void EntityRelease(entity_pool Pool, entity Entity) {
     Pool.FirstFreeEntity = Entity;
 }
 */
+
 typedef enum arena_flags {
-    ARENA_NoChainGrow = (1 << 0),
-    ARENA_LargePages = (1 << 1),
-    ARENA_FreeList = (1 << 2)
+    Arena_NoChainGrow = (1 << 0),
+    Arena_LargePages = (1 << 1),
+    Arena_FreeList = (1 << 2)
 } arena_flags;
 
 // NOTE(acol): for padding to cache line
@@ -48,40 +49,62 @@ typedef enum arena_flags {
 #define ARENA_DEFAULT_FLAGS 0
 
 typedef struct arena {
-    struct arena *Current = 0;
-    struct arena *Prev = 0;
-    u64 Reserved = 0;
-    u64 Commited = 0;
-    u64 BasePos = 0;
-    u64 Pos = 0;
-    u64 Flags = 0;
-    arena *FreeLast = 0;
-    u64 FreeSize = 0;
+    struct arena *Current;
+    struct arena *Prev;
+    u64 Reserved;
+    u64 Commited;
+    u64 BasePos;
+    u64 Pos;
+    u64 Flags;
+    struct arena *FreeLast;
+    u64 FreeSize;
 } arena;
 StaticAssert(sizeof(arena) <= ARENA_STRUCT_SIZE, arena struct too long);
 
 typedef struct temp_arena {
-    arena *Arena = 0;
-    u64 OldPos = 0;
+    arena *Arena;
+    u64 OldPos;
 } temp_arena;
 
 typedef struct arena_alloc_params {
     // NOTE(acol): Default is chain growing
-    u64 Flags = ARENA_DEFAULT_FLAGS;
-    u64 ReserveSize = ARENA_DEFAULT_RESERVE_SIZE;
-    u64 CommitSize = ARENA_DEFAULT_COMMIT_SIZE;
-    void *BackingBuffer = 0;
+    u64 Flags;
+    u64 ReserveSize;
+    u64 CommitSize;
+    void *BackingBuffer;
 } arena_alloc_params;
 
-static arena *ArenaAlloc(arena_alloc_params Params);
+static arena *ArenaAlloc_(arena_alloc_params Params);
 static void ArenaRelease(arena *Arena);
+
 static u64 ArenaPos(arena *Arena);
-static void *ArenaPush(arena *Arena, u64 Size, u64 Align = 4);
-static void *ArenaPushZero(arena *Arena, u64 Size, u64 Align = 4);
+static void *ArenaPushNoZeroAligned(arena *Arena, u64 Size, u64 Align);
+static void *ArenaPushAligned(arena *Arena, u64 Size, u64 Align);
+
 static void ArenaPopTo(arena *Arena, u64 Pos);
-static void ArenaReset(arena *Arena);
 static void ArenaPop(arena *Arena, u64 Size);
+static void ArenaReset(arena *Arena);
+
 static temp_arena TempBegin(arena *Arena);
 static void TempEnd(temp_arena Temp);
+
+#define ArenaAlloc(...)                                                         \
+    ArenaAlloc_((arena_alloc_params){.Flags = ARENA_DEFAULT_FLAGS,              \
+                                     .ReserveSize = ARENA_DEFAULT_RESERVE_SIZE, \
+                                     .CommitSize = ARENA_DEFAULT_COMMIT_SIZE,   \
+                                     .BackingBuffer = 0,                        \
+                                     __VA_ARGS__})
+
+#define ArenaPushNoZero(Arena, Size) ArenaPushNoZeroAligned((Arena), (Size), 4)
+#define ArenaPush(Arena, Size) ArenaPushAligned((Arena), (Size), 4)
+
+#define PushArrayNoZeroAligned(Arena, Type, Count, Align) \
+    (Type *)ArenaPushNoZeroAligned((Arena), sizeof(Type) * (Count), (Align))
+#define PushArrayAligned(Arena, Type, Count, Align) \
+    (Type *)ArenaPushAligned((Arena), sizeof(Type) * (Count), (Align))
+
+#define PushArrayNoZero(Arena, Type, Count) \
+    (Type *)ArenaPushNoZeroAligned((Arena), sizeof(Type) * (Count), AlignOf(Type))
+#define PushArray(Arena, Type, Count) (Type *)ArenaPushAligned((Arena), sizeof(Type) * (Count), AlignOf(Type))
 
 #endif  // ARENA_H
