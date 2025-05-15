@@ -1,4 +1,4 @@
-AsanDisable static u64 CstringSize(char *Cstr) {
+asan_disable static u64 CstringSize(char *Cstr) {
     u64 Size = 0;
     for (;;) {
         if (*Cstr == '\0') return Size;
@@ -20,6 +20,7 @@ AsanDisable static u64 CstringSize(char *Cstr) {
     }
     return Size;
 }
+
 static string8 String8FromCstring(char *Cstr) {
     u64 Size = CstringSize(Cstr);
     string8 String = {(u8 *)Cstr, Size};

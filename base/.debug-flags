@@ -1,7 +1,8 @@
--DENABLE_ASSERT
+-DASSERT=1
 -DPROFILE=1
 -DVK_VALIDATE=1
 -DARENA_LOGGING=0
+-mfma
 -mavx2
 -fno-exceptions 
 -Wall 

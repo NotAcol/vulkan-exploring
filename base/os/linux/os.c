@@ -1,3 +1,12 @@
+static u64 OsReadTimer(void) {
+    struct timeval Time;
+    gettimeofday(&Time, 0);
+    u64 Ret = 1000000 * (u64)Time.tv_sec + (u64)Time.tv_usec;
+    return Ret;
+}
+
+static u64 OsTimerFrequency(void) { return 1000000; }
+
 static void *OsReserve(u64 Size) {
     void *Temp = mmap(0, Size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     return Temp == MAP_FAILED ? (void *)0 : Temp;
@@ -23,7 +32,7 @@ static b32 OsCommitLarge(void *Ptr, u64 Size) {
     return 1;
 }
 
-static os_file_handle OsFileOpen(string8 Path, os_access_flags Flags) {
+static os_handle OsFileOpen(string8 Path, os_access_flags Flags) {
     temp_arena Scratch = ScratchBegin(0, 0);
     string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
 
@@ -43,16 +52,16 @@ static os_file_handle OsFileOpen(string8 Path, os_access_flags Flags) {
     }
     i32 Fd = open((char *)PathCopy.Str, LinuxFlags, 0755);
 
-    os_file_handle Ret = {0};
+    os_handle Ret = {0};
     if (Fd >= 0) {
         Ret = Fd;
     }
 
     ScratchEnd(Scratch);
-    return (os_file_handle)(((i32)Ret == -1) ? 0 : Ret);
+    return (os_handle)(((i32)Ret == -1) ? 0 : Ret);
 }
 
-static void OsFileClose(os_file_handle File) {
+static void OsFileClose(os_handle File) {
     if (File == 0) return;
     close((i32)File);
 }
@@ -109,7 +118,7 @@ static b32 OsDeleteDir(string8 Path) {
     return Ret;
 }
 
-static u64 OsFileRead(os_file_handle File, v2_u64 ReadWindow, void *Data) {
+static u64 OsFileRead(os_handle File, v2_u64 ReadWindow, void *Data) {
     if (File == 0) return 0;
     u64 LeftToRead = ReadWindow.Max - ReadWindow.Min;
     u64 Read = 0;
@@ -127,7 +136,7 @@ static u64 OsFileRead(os_file_handle File, v2_u64 ReadWindow, void *Data) {
     return Read;
 }
 
-static u64 OsFileWrite(os_file_handle File, v2_u64 WriteWindow, void *Data) {
+static u64 OsFileWrite(os_handle File, v2_u64 WriteWindow, void *Data) {
     if (File == 0) {
         return 0;
     }
@@ -148,7 +157,7 @@ static u64 OsFileWrite(os_file_handle File, v2_u64 WriteWindow, void *Data) {
     return Written;
 }
 
-static void *OsFileMap(os_file_handle File, os_access_flags Flags, v2_u64 MapWindow) {
+static void *OsFileMap(os_handle File, os_access_flags Flags, v2_u64 MapWindow) {
     if (File == 0) return (void *)0;
 
     void *Ret = 0;
@@ -166,35 +175,43 @@ static void *OsFileMap(os_file_handle File, os_access_flags Flags, v2_u64 MapWin
 
 static void OsFileUnmap(void *Ptr, v2_u64 MapWindow) { munmap(Ptr, MapWindow.Max - MapWindow.Min); }
 
-static os_file_handle OsSharedMemoryAlloc(string8 Name, u64 Size) {
+static os_handle OsSharedMemoryAlloc(string8 Name, u64 Size) {
     temp_arena Scratch = ScratchBegin(0, 0);
     string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
 
     i32 Id = shm_open((char *)NameCopy.Str, O_RDWR, 0);
     ftruncate(Id, Size);
-    os_file_handle Ret = Id;
+    os_handle Ret = Id;
 
     ScratchEnd(Scratch);
     return Ret;
 }
+static void OsSharedMemoryDelete(string8 Name) {
+    temp_arena Scratch = ScratchBegin(0, 0);
+    string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
 
-static os_file_handle OsSharedMemoryOpen(string8 Name) {
+    shm_unlink((char *)NameCopy.Str);
+
+    ScratchEnd(Scratch);
+}
+
+static os_handle OsSharedMemoryOpen(string8 Name) {
     temp_arena Scratch = ScratchBegin(0, 0);
     string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
 
     i32 Id = shm_open((char *)NameCopy.Str, O_RDWR, 0);
-    os_file_handle Ret = Id;
+    os_handle Ret = Id;
 
     ScratchEnd(Scratch);
     return Ret;
 }
 
-static void OsSharedMemoryClose(os_file_handle Handle) {
+static void OsSharedMemoryClose(os_handle Handle) {
     if (Handle == 0) return;
     close((i32)Handle);
 }
 
-static void *OsSharedMemoryMap(os_file_handle Handle, v2_u64 MapWindow) {
+static void *OsSharedMemoryMap(os_handle Handle, v2_u64 MapWindow) {
     if (Handle == 0) return 0;
     void *Ret = mmap(0, MapWindow.Max - MapWindow.Min, PROT_WRITE | PROT_READ, MAP_SHARED | MAP_POPULATE,
                      (i32)Handle, MapWindow.Min);
@@ -204,88 +221,83 @@ static void *OsSharedMemoryMap(os_file_handle Handle, v2_u64 MapWindow) {
     return Ret;
 }
 
-static void OsSharedMemoryUnmap(os_file_handle Handle, void *Ptr, v2_u64 MapWindow) {
+static void OsSharedMemoryUnmap(os_handle Handle, void *Ptr, v2_u64 MapWindow) {
     if (Handle == 0) return;
     munmap(Ptr, MapWindow.Max - MapWindow.Min);
 }
 
-static void *RingBufferAlloc(string8 Name, u64 Size) {
-    temp_arena Scratch = ScratchBegin(0, 0);
-    string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
-
+static ring_buffer RingBufferAlloc(u64 Size) {
+    u8 *Base = 0;
     u8 *BuffPrev = 0;
     u8 *RingBuff = 0;
     u8 *BuffNext = 0;
-    u64 RingSize = AlignPow2(Size, KB(4));
 
-    i32 FileFd = shm_open((char *)NameCopy.Str, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    u64 RingSize = AlignPow2(Size, OS_PAGE_SIZE);
+
+    // NOTE(acol): FD_CLOEXEC means close on successful execve
+    i32 FileFd = syscall(__NR_memfd_create, "erm", FD_CLOEXEC);
     if (!(FileFd > 0)) {
-        return (void *)0;
+        return (ring_buffer){0};
     }
     ftruncate(FileFd, RingSize);
 
-    // NOTE(acol): Try 100 times untill you get consecutive memory
-    for (u32 i = 0; i < 100; i++) {
-        BuffPrev = (u8 *)mmap(0, RingSize, PROT_READ | PROT_WRITE, MAP_POPULATE | MAP_SHARED, FileFd, 0);
-        if (BuffPrev == MAP_FAILED) {
-            BuffPrev = 0;
-            RingBuff = 0;
-            BuffNext = 0;
-            continue;
-        }
+    if ((Base = (u8 *)mmap(0, RingSize * 3, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)) == MAP_FAILED)
+        goto CLEANUP_1;
 
-        RingBuff = (u8 *)mmap(BuffPrev - RingSize, RingSize, PROT_READ | PROT_WRITE,
-                              MAP_POPULATE | MAP_SHARED | MAP_FIXED_NOREPLACE, FileFd, 0);
-        if (RingBuff == MAP_FAILED) {
-            munmap(BuffPrev, RingSize);
-            BuffPrev = 0;
-            RingBuff = 0;
-            BuffNext = 0;
-            continue;
-        }
+    if ((BuffPrev = (u8 *)mmap(Base, RingSize, PROT_READ | PROT_WRITE, MAP_POPULATE | MAP_SHARED | MAP_FIXED,
+                               FileFd, 0)) == MAP_FAILED)
+        goto CLEANUP_1;
 
-        BuffNext = (u8 *)mmap(RingBuff - RingSize, RingSize, PROT_READ | PROT_WRITE,
-                              MAP_POPULATE | MAP_SHARED | MAP_FIXED_NOREPLACE, FileFd, 0);
-        if (BuffNext == MAP_FAILED) {
-            munmap(BuffPrev, RingSize);
-            munmap(RingBuff, RingSize);
-            BuffPrev = 0;
-            RingBuff = 0;
-            BuffNext = 0;
-            continue;
-        }
+    if ((RingBuff = (u8 *)mmap(Base + RingSize, RingSize, PROT_READ | PROT_WRITE,
+                               MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED)
+        goto CLEANUP_2;
 
-        if (((u64)(BuffPrev - RingBuff) != RingSize) || ((u64)(RingBuff - BuffNext) != RingSize)) {
-            munmap(BuffPrev, RingSize);
-            munmap(RingBuff, RingSize);
-            munmap(BuffNext, RingSize);
-            BuffPrev = 0;
-            RingBuff = 0;
-            BuffNext = 0;
-        } else {
-            break;
-        }
-    }
+    if ((BuffNext = (u8 *)mmap(Base + 2 * RingSize, RingSize, PROT_READ | PROT_WRITE,
+                               MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED)
+        goto CLEANUP_3;
 
-    shm_unlink((char *)NameCopy.Str);
+    Assert(((u64)(RingBuff - BuffPrev) == RingSize) && ((u64)(BuffNext - RingBuff) == RingSize));
+
+    if (((u64)(RingBuff - BuffPrev) != RingSize) || ((u64)(BuffNext - RingBuff) != RingSize)) goto CLEANUP_4;
+
+    return (ring_buffer){.Data = RingBuff, .RingSize = RingSize};
+
+CLEANUP_4:
+    munmap(BuffNext, RingSize);
+CLEANUP_3:
+    munmap(RingBuff, RingSize);
+CLEANUP_2:
+    munmap(BuffPrev, RingSize);
+CLEANUP_1:
+
+    return (ring_buffer){0};
+}
+
+static void RingBufferRelease(ring_buffer RingBuffer) {
+    u8 *Buff = (u8 *)RingBuffer.Data;
+    u64 RingSize = RingBuffer.RingSize;
+
+    munmap(Buff - RingSize, RingSize * 3);
+}
+
+static os_handle OsLibraryOpen(string8 Path) {
+    temp_arena Scratch = ScratchBegin(0, 0);
+    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
+
+    os_handle Lib = (u64)dlopen((char *)PathCopy.Str, RTLD_LAZY | RTLD_LOCAL);
 
     ScratchEnd(Scratch);
-
-    return (void *)RingBuff;
+    return Lib;
 }
 
-static void RingBufferRelease(void *RingBuffer, u64 RingSize) {
-    u8 *Buff = RingBuffer;
-    munmap(Buff - RingSize, RingSize);
-    munmap(Buff + RingSize, RingSize);
-    munmap(Buff, RingSize);
-}
+static void *OsLibraryLoadSymbol(os_handle Lib, string8 Symbol) {
+    temp_arena Scratch = ScratchBegin(0, 0);
+    string8 SymbolCopy = PushString8Copy(Scratch.Arena, Symbol);
 
-static u64 OsReadTimer(void) {
-    struct timeval Time;
-    gettimeofday(&Time, 0);
-    u64 Ret = 1000000 * (u64)Time.tv_sec + (u64)Time.tv_usec;
+    void *Ret = dlsym((void *)Lib, (char *)SymbolCopy.Str);
+
+    ScratchEnd(Scratch);
     return Ret;
 }
 
-static u64 OsTimerFrequency(void) { return 1000000; }
+static void OsLibraryClose(os_handle Lib) { dlclose((void *)Lib); }

@@ -1,4 +1,4 @@
--DENABLE_ASSERT
+-DASSERT=1
 -DPROFILE=1
 -DVK_VALIDATE=1
 -DARENA_LOGGING=0
@@ -12,6 +12,12 @@
 -fno-math-errno
 -fno-trapping-math
 -fno-signed-zeros
+-Wall 
+-Wextra
+-pedantic
+-Wno-unused-function
+-Wno-missing-braces
+-Wno-excess-initializers
 -freciprocal-math
 -fassociative-math
 -fuse-ld=lld

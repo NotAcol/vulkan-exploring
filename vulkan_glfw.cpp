@@ -775,8 +775,8 @@ int main(void) {
     // NOTE(acol): instance extensiosn
     const char** Extensions = (const char**)ArenaPush(
         GlobalArena, sizeof(*GlfwExtensions) * (GlfwExtensionCount + ArrayCount(RequiredInstanceExtensions)));
-    MemoryCopyTyped(Extensions, GlfwExtensions, GlfwExtensionCount);
-    MemoryCopyTyped(Extensions + GlfwExtensionCount, RequiredInstanceExtensions,
+    MemoryCopyArray(Extensions, GlfwExtensions, GlfwExtensionCount);
+    MemoryCopyArray(Extensions + GlfwExtensionCount, RequiredInstanceExtensions,
                     ArrayCount(RequiredInstanceExtensions));
     CreateInfo.ppEnabledExtensionNames = Extensions;
     CreateInfo.enabledExtensionCount = GlfwExtensionCount + ArrayCount(RequiredInstanceExtensions);

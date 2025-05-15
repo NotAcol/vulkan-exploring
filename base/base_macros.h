@@ -195,14 +195,14 @@
     #define AsanUnpoison(Address, Size) __asan_unpoison_memory_region((void *)(Address), (Size))
 
     #if COMPILER_CLANG || COMPILER_GCC
-        #define AsanDisable __attribute__((no_sanitize_address))
+        #define asan_disable __attribute__((no_sanitize_address))
     #else
-        #define AsanDisable __declspec(no_sanitize_address)
+        #define asan_disable __declspec(no_sanitize_address)
     #endif
 #else
     #define AsanPoison(...)
     #define AsanUnpoison(...)
-    #define AsanDisable
+    #define asan_disable
 #endif
 
 /*  =====================================================================================
@@ -297,18 +297,15 @@
 #define MemoryCompare(A, B, Size) memcmp((A), (B), (Size))
 #define MemoryMatch(A, B, Size) (MemoryCompare((A), (B), (Size)) == 0)
 #define MemoryMatchStruct(A, B) MemoryMatch((A), (B), sizeof(*(A)))
-#define MemoryMatchArray(A, B) MemoryMatch((A), (B), sizeof((A)))
+#define MemoryMatchArray(A, B, Count) MemoryMatch((A), (B), sizeof(*(A)) * (Count))
 
 #define MemoryZero(Pointer, Size) memset((Pointer), 0, (Size))
 #define MemoryZeroStruct(Pointer) MemoryZero((Pointer), sizeof(*(Pointer)))
-#define MemoryZeroArray(Pointer) MemoryZero((Pointer), sizeof(Pointer))
-#define MemoryZeroTyped(Pointer, Count) MemoryZero((Pointer), sizeof(*(Pointer)) * (Count))
+#define MemoryZeroArray(Pointer, Count) MemoryZero((Pointer), sizeof(*(Pointer)) * (Count))
 
 #define MemoryCopy(Dest, Source, Size) memmove((Dest), (Source), (Size))
 #define MemoryCopyStruct(Dest, Source) MemoryCopy((Dest), (Source), Min(sizeof(*(Dest)), sizeof(*(Source))))
-#define MemoryCopyArray(Dest, Source) MemoryCopy((Dest), (Source), Min(sizeof((Dest)), sizeof((Source))))
-#define MemoryCopyTyped(Dest, Source, Count) \
-    MemoryCopy((Dest), (Source), Min(sizeof(*(Dest)), sizeof(*(Source))) * Count)
+#define MemoryCopyArray(Dest, Source, Count) MemoryCopy((Dest), (Source), sizeof(*(Source)) * Count)
 
 /*  =====================================================================================
 
@@ -342,7 +339,7 @@
 
 #define AssertAlways(C) Statement(if (Unlikely(!(C))) { AssertBreak(C); })
 
-#if defined(ENABLE_ASSERT)
+#if ASSERT
     #define Assert(C) AssertAlways(C)
 #else
     #define Assert(...)
