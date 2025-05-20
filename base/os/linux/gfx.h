@@ -14,32 +14,6 @@
 
     ===================================================================================== */
 
-typedef struct wayland_context {
-    u32 CurrentId;
-    i32 SocketFd;
-
-    u32 RegistryId;
-
-    u32 Width;
-    u32 Height;
-
-    // TODO
-    u32 wl_shm;
-    u32 wl_shm_pool;
-    u32 wl_buffer;
-    u32 xdg_wm_base;
-    u32 xdg_surface;
-    u32 wl_compositor;
-    u32 wl_surface;
-    u32 xdg_toplevel;
-    u32 stride;
-    u32 shm_pool_size;
-    i32 shm_fd;
-    u8 *shm_pool_data;
-
-    //  state_state_t state;
-} wayland_context;
-
 #define WAYLAND_HEADER_SIZE 8u
 
 #define WAYLAND_DISPLAY_OBJECT_ID 1u
@@ -66,19 +40,42 @@ typedef struct wayland_context {
 
 #define COLOR_CHANNELS 4u
 
+typedef struct wayland_context {
+    u32 CurrentId;
+    i32 SocketFd;
+
+    u32 RegistryId;
+
+    u32 Width;
+    u32 Height;
+
+    ring_buffer RingBuffer;
+
+    // TODO
+    u32 wl_shm;
+    u32 wl_shm_pool;
+    u32 wl_buffer;
+    u32 xdg_wm_base;
+    u32 xdg_surface;
+    u32 wl_compositor;
+    u32 wl_surface;
+    u32 xdg_toplevel;
+    u32 stride;
+    u32 shm_pool_size;
+    i32 shm_fd;
+    u8 *shm_pool_data;
+
+    //  state_state_t state;
+} wayland_context;
+
 typedef struct wayland_header {
     u32 ResourceId;
     u16 Opcode;
-    u16 Length;
+    u16 Size;
 } wayland_header;
 
-typedef struct wayland_message {
-    wayland_header Header;
-    u8 *Data;
-} wayland_message;
-
 static void WaylandDisplayConnect(wayland_context *Context);
-static wayland_message WaylandGetRegistry(wayland_context *Context);
+static void WaylandGetRegistry(wayland_context *Context);
 
 #define WaylandMessagePush(Buff, Pos, Value, Type) \
     Statement(*(Type *)((u8 *)(Buff) + (Pos)) = (Type)(Value); (Pos) += sizeof(Type);)

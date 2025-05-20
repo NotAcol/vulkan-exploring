@@ -34,26 +34,44 @@ static wayland_message WaylandGetRegistry(wayland_context *Context) {
     u32 CurrentId = Context->CurrentId;
     i32 Fd = Context->SocketFd;
 
-    Trap();
-
     CurrentId++;
-    u64 Pos = 0;
-    u8 *Buff = ArenaPush(Scratch.Arena, WAYLAND_HEADER_SIZE + sizeof(Context->CurrentId));
 
-    WaylandMessagePush(Buff, Pos, WAYLAND_DISPLAY_OBJECT_ID, u32);
-    WaylandMessagePush(Buff, Pos, WAYLAND_WL_DISPLAY_GET_REGISTRY_OPCODE, u16);
-    WaylandMessagePush(Buff, Pos, WAYLAND_HEADER_SIZE + sizeof(Context->CurrentId), u16);
-    WaylandMessagePush(Buff, Pos, CurrentId, u32);
+    wayland_header Header = {WAYLAND_DISPLAY_OBJECT_ID, WAYLAND_WL_DISPLAY_GET_REGISTRY_OPCODE,
+                             sizeof(wayland_header) + sizeof(Context->CurrentId)};
 
-    if ((WAYLAND_HEADER_SIZE + sizeof(CurrentId)) !=
-        send(Fd, Buff, WAYLAND_HEADER_SIZE + sizeof(CurrentId), MSG_DONTWAIT)) {
-        Assert(0);
-    }
+    u8 *Buff = (u8 *)ArenaPush(Scratch.Arena, sizeof(wayland_header) + sizeof(Context->CurrentId));
+    *(wayland_header *)Buff = Header;
+    *(u32 *)(Buff + sizeof(wayland_header)) = CurrentId;
+
+    Assert((sizeof(wayland_header) + sizeof(CurrentId)) ==
+           send(Fd, Buff, sizeof(wayland_header) + sizeof(CurrentId), MSG_DONTWAIT));
+
     Context->RegistryId = CurrentId;
     Context->CurrentId = CurrentId;
-    wayland_message Message = {WAYLAND_DISPLAY_OBJECT_ID, WAYLAND_WL_DISPLAY_GET_REGISTRY_OPCODE,
-                               WAYLAND_HEADER_SIZE + sizeof(Context->CurrentId), 0};
-
     ScratchEnd(Scratch);
-    return Message;
+}
+
+static void WaylandReadMessages(wayland_context *Context) {
+    ring_buffer RingBuffer = Context->RingBuffer;
+
+    i64 Read = recv(Context->SocketFd, RingBuffer.Data + (RingBuffer.Read & (RingBuffer.RingSize - 1)),
+                    RingBuffer.RingSize - (RingBuffer.Written - RingBuffer.Read), 0);
+    Assert(Read != -1);
+    RingBuffer.Written += Read;
+}
+
+static void WaylandHandleEvents(wayland_context *Context) {
+    WaylandReadMessages(Context);
+    ring_buffer RingBuffer = Context->RingBuffer;
+
+    while (RingBiffer.Read < RingBuffer.Written) {
+        wayland_header Header = *(wayland_header *)(RingBuffer.Data + RingBuffer.Read);
+        u8 *Data = RingBuffer.Data + RingBuffer.Read + Header.Size - sizeof(wayland_header);
+        switch (Header.ResourceId) {
+            case Context->RegistryId: {
+                if (Header.Opcode == WAYLAND_WL_REGISTRY_EVENT_GLOBAL) {
+                    if (srtcmp()) }
+            } break;
+        }
+    }
 }
