@@ -2,6 +2,7 @@
 -DPROFILE=1
 -DVK_VALIDATE=1
 -DARENA_LOGGING=0
+-DWAYLAND_DEBUG=1
 -mfma
 -mavx2
 -fno-exceptions 

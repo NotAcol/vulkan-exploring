@@ -260,7 +260,7 @@ static ring_buffer RingBufferAlloc(u64 Size) {
 
     if (((u64)(RingBuff - BuffPrev) != RingSize) || ((u64)(BuffNext - RingBuff) != RingSize)) goto CLEANUP_4;
 
-    return (ring_buffer){.Data = RingBuff, .RingSize = RingSize};
+    return (ring_buffer){.Data = RingBuff, .RingSize = RingSize, .Read = 0, .Written = 0};
 
 CLEANUP_4:
     munmap(BuffNext, RingSize);
