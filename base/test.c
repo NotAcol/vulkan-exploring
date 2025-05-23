@@ -46,6 +46,9 @@ typedef struct wayland_context {
     u32 RegistryId;
     u32 XdgWmBaseId;
     u32 WlCompositorId;
+    u32 WlSurfaceId;
+    u32 XdgSurfaceId;
+    u32 XdgToplevel;
 
     u32 Width;
     u32 Height;
@@ -56,9 +59,6 @@ typedef struct wayland_context {
     u32 wl_shm;
     u32 wl_shm_pool;
     u32 wl_buffer;
-    u32 xdg_surface;
-    u32 wl_surface;
-    u32 xdg_toplevel;
     u32 stride;
     u32 shm_pool_size;
     i32 shm_fd;
@@ -227,6 +227,100 @@ i32 main(void) {
                        RingBuffer.Data + (RingBuffer.Read & (RingBuffer.RingSize - 1)));
         }
         RingBuffer.Read = ReadPrev + Header.Size;
+    }
+
+    AssertAlways(Context.XdgWmBaseId != 0 && Context.WlCompositorId != 0);
+
+    {
+        // NOTE(acol): Create surface
+        temp_arena Scratch = ScratchBegin(0, 0);
+
+        wayland_header Header = {.ResourceId = Context.WlCompositorId,
+                                 .Opcode = WAYLAND_WL_COMPOSITOR_CREATE_SURFACE_OPCODE,
+                                 .Size = sizeof(wayland_header) + sizeof(Context.CurrentId)};
+        Context.CurrentId++;
+        u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+        u8 *Temp = Buffer;
+
+        *(wayland_header *)Buffer = Header;
+        Buffer += sizeof(wayland_header);
+
+        *(u32 *)Buffer = Context.CurrentId;
+        Buffer += sizeof(Context.CurrentId);
+
+        Assert(Header.Size == send(Context.SocketFd, Temp, Buffer - Temp, 0));
+        Context.WlSurfaceId = Context.CurrentId;
+
+        ScratchEnd(Scratch);
+    }
+
+    {
+        // NOTE(acol): Create XDG surface
+        temp_arena Scratch = ScratchBegin(0, 0);
+
+        wayland_header Header = {
+            .ResourceId = Context.XdgWmBaseId,
+            .Opcode = WAYLAND_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE,
+            .Size = sizeof(wayland_header) + sizeof(Context.CurrentId) + sizeof(Context.WlSurfaceId)};
+        Context.CurrentId++;
+        u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+        u8 *Temp = Buffer;
+
+        *(wayland_header *)Buffer = Header;
+        Buffer += sizeof(wayland_header);
+
+        *(u32 *)Buffer = Context.CurrentId;
+        Buffer += sizeof(Context.CurrentId);
+
+        *(u32 *)Buffer = Context.WlSurfaceId;
+        Buffer += sizeof(Context.WlSurfaceId);
+
+        Assert(Header.Size == send(Context.SocketFd, Temp, Buffer - Temp, 0));
+        Context.XdgSurfaceId = Context.CurrentId;
+
+        ScratchEnd(Scratch);
+    }
+
+    {
+        // NOTE(acol): Create XDG top level surface
+        temp_arena Scratch = ScratchBegin(0, 0);
+
+        wayland_header Header = {.ResourceId = Context.XdgSurfaceId,
+                                 .Opcode = WAYLAND_XDG_SURFACE_GET_TOPLEVEL_OPCODE,
+                                 .Size = sizeof(wayland_header) + sizeof(Context.CurrentId)};
+        Context.CurrentId++;
+        u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+        u8 *Temp = Buffer;
+
+        *(wayland_header *)Buffer = Header;
+        Buffer += sizeof(wayland_header);
+
+        *(u32 *)Buffer = Context.CurrentId;
+        Buffer += sizeof(Context.CurrentId);
+
+        Assert(Header.Size == send(Context.SocketFd, Temp, Buffer - Temp, 0));
+        Context.XdgToplevel = Context.CurrentId;
+
+        ScratchEnd(Scratch);
+    }
+
+    {
+        // NOTE(acol): Commit surface
+        temp_arena Scratch = ScratchBegin(0, 0);
+
+        wayland_header Header = {.ResourceId = Context.WlSurfaceId,
+                                 .Opcode = WAYLAND_WL_SURFACE_COMMIT_OPCODE,
+                                 .Size = sizeof(wayland_header)};
+
+        u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+        u8 *Temp = Buffer;
+
+        *(wayland_header *)Buffer = Header;
+        Buffer += sizeof(wayland_header);
+
+        Assert(Header.Size == send(Context.SocketFd, Temp, Buffer - Temp, 0));
+
+        ScratchEnd(Scratch);
     }
 
     RingBufferRelease(Context.RingBuffer);
