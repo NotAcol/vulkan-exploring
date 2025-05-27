@@ -571,6 +571,7 @@ static void wayland_handle_message(int fd, state_t *state, char **msg, uint64_t 
 
         return;
     } else if (object_id == state->xdg_toplevel && opcode == wayland_xdg_toplevel_event_close) {
+        // TODO
         printf("<- xdg_toplevel@%u.close\n", state->xdg_toplevel);
         exit(0);
     }

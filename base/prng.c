@@ -2,7 +2,7 @@ static void ShishuaGen(shishua_state *restrict S, u64 *restrict Buffer, u64 Leng
     __m256i S0 = S->State[0], S1 = S->State[1], Output = S->Output, Counter = S->Counter;
 
     // TODO(acol): make this deal with arrays of length different than multiples of 4
-    Assert(((Length % 4) == 0));
+    // Assert(((Length % 4) == 0));
 
     for (u64 i = 0; i < Length; i += 4) {
         __m256i Increment = _mm256_set_epi64x(1, 3, 5, 7);

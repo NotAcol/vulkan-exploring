@@ -16,4 +16,5 @@
 -fuse-ld=lld 
 -fno-trapping-math
 -fno-math-errno
+-fsanitize=address,leak
 -g3

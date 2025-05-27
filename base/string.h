@@ -34,7 +34,7 @@ typedef struct string8_join {
 #define String8Typed(S) \
     (string8) { (u8 *)(S), sizeof(*(S)) }
 
-static u64 Cstring8Length(char *Cstr);
+static u64 CstringLength(char *Cstr);
 static string8 String8FromCstring(char *Cstr);
 static string8 String8FromRange(u8 *First, u8 *Last);
 

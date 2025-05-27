@@ -800,6 +800,10 @@ typedef union v2_u32 {
         u32 Min;
         u32 Max;
     };
+    struct {
+        u32 Width;
+        u32 Height;
+    };
     u32 V[2];
 } v2_u32;
 

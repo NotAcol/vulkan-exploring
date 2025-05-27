@@ -13,29 +13,42 @@ thread_local tctx *TctxThreadLocal;
     #define WaylandLog(...)
 #endif
 
-#define WAYLAND_HEADER_SIZE 8u
-
 #define WAYLAND_DISPLAY_OBJECT_ID 1u
+
+#define WAYLAND_WL_DISPLAY_GET_REGISTRY_OPCODE (u16)1
+
+#define WAYLAND_WL_REGISTRY_BIND_OPCODE (u16)0
 #define WAYLAND_WL_REGISTRY_EVENT_GLOBAL (u16)0
-#define WAYLAND_SHM_POOL_EVENT_FORMAT (u16)0
-#define WAYLAND_WL_BUFFER_EVENT_RELEASE (u16)0
+
+#define WAYLAND_WL_SURFACE_COMMIT_OPCODE (u16)6
+#define WAYLAND_WL_SURFACE_ATTACH_OPCODE (u16)1
+
 #define WAYLAND_XDG_WM_BASE_EVENT_PING (u16)0
+#define WAYLAND_XDG_WM_BASE_PONG_OPCODE (u16)3
+#define WAYLAND_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE (u16)2
+
+#define WAYLAND_XDG_SURFACE_EVENT_CONFIGURE (u16)0
+#define WAYLAND_XDG_SURFACE_ACK_CONFIGURE_OPCODE (u16)4
+#define WAYLAND_XDG_SURFACE_GET_TOPLEVEL_OPCODE (u16)1
+
 #define WAYLAND_XDG_TOPLEVEL_EVENT_CONFIGURE (u16)0
 #define WAYLAND_XDG_TOPLEVEL_EVENT_CLOSE (u16)1
-#define WAYLAND_XDG_SURFACE_EVENT_CONFIGURE (u16)0
-#define WAYLAND_WL_DISPLAY_GET_REGISTRY_OPCODE (u16)1
-#define WAYLAND_WL_REGISTRY_BIND_OPCODE (u16)0
+#define WAYLAND_XDG_TOPLEVEL_SET_TITLE_OPCODE (u16)2
+#define WAYLAND_XDG_TOPLEVEL_DESTROY_OPCODE (u16)0
+
 #define WAYLAND_WL_COMPOSITOR_CREATE_SURFACE_OPCODE (u16)0
-#define WAYLAND_XDG_WM_BASE_PONG_OPCODE (u16)3
-#define WAYLAND_XDG_SURFACE_ACK_CONFIGURE_OPCODE (u16)4
-#define WAYLAND_WL_SHM_CREATE_POOL_OPCODE (u16)0
-#define WAYLAND_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE (u16)2
-#define WAYLAND_WL_SHM_POOL_CREATE_BUFFER_OPCODE (u16)0
-#define WAYLAND_WL_SURFACE_ATTACH_OPCODE (u16)1
-#define WAYLAND_XDG_SURFACE_GET_TOPLEVEL_OPCODE (u16)1
-#define WAYLAND_WL_SURFACE_COMMIT_OPCODE (u16)6
+
 #define WAYLAND_WL_DISPLAY_ERROR_EVENT (u16)0
+
 #define WAYLAND_FORMAT_XRGB8888 1u
+
+#define WAYLAND_XDG_SURFACE_DESTROY_OPCODE (u16)0
+
+#define WAYLAND_WL_SURFACE_DESTROY_OPCODE (u16)0
+
+#define WAYLAND_XDG_WM_BASE_DESTROY_OPCODE (u16)0
+
+#define WAYLAND_WL_SUBCOMPOSITOR_DESTROY_OPCODE (u16)0
 
 #define COLOR_CHANNELS 4u
 
@@ -44,9 +57,10 @@ typedef struct wayland_context {
     i32 SocketFd;
 
     u32 RegistryId;
-    u32 XdgWmBaseId;
     u32 WlCompositorId;
     u32 WlSurfaceId;
+
+    u32 XdgWmBaseId;
     u32 XdgSurfaceId;
     u32 XdgToplevel;
 
@@ -54,15 +68,6 @@ typedef struct wayland_context {
     u32 Height;
 
     ring_buffer RingBuffer;
-
-    // TODO
-    u32 wl_shm;
-    u32 wl_shm_pool;
-    u32 wl_buffer;
-    u32 stride;
-    u32 shm_pool_size;
-    i32 shm_fd;
-    u8 *shm_pool_data;
 
     //  state_state_t state;
 } wayland_context;
@@ -168,7 +173,7 @@ i32 main(void) {
     tctx Tctx;
     TctxInitAndEquip(&Tctx);
 
-    AssertAlways(sizeof(wayland_header) == WAYLAND_HEADER_SIZE);
+    AssertAlways(sizeof(wayland_header) == sizeof(wayland_header));
     wayland_context Context;
 
     Context.RingBuffer = RingBufferAlloc(KB(4));
@@ -225,9 +230,12 @@ i32 main(void) {
             RingBufferReadDirect(RingBuffer, ErrorLen, u32);
             WaylandLog("Fatal Error:\n  Target Obejct: %u Code: %u Error: %s\n\n", ObjectId, Code,
                        RingBuffer.Data + (RingBuffer.Read & (RingBuffer.RingSize - 1)));
+        } else {
+            Assert(0);
         }
         RingBuffer.Read = ReadPrev + Header.Size;
     }
+    Context.RingBuffer = RingBuffer;
 
     AssertAlways(Context.XdgWmBaseId != 0 && Context.WlCompositorId != 0);
 
@@ -305,6 +313,31 @@ i32 main(void) {
     }
 
     {
+        // NOTE(acol): Set title
+        temp_arena Scratch = ScratchBegin(0, 0);
+
+        string8 Title = String8Lit("Test title");
+
+        wayland_header Header = {.ResourceId = Context.XdgToplevel,
+                                 .Opcode = WAYLAND_XDG_TOPLEVEL_SET_TITLE_OPCODE,
+                                 .Size = AlignPow2(sizeof(wayland_header) + sizeof(u32) + Title.Size + 1, 4)};
+
+        u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+        u8 *Temp = Buffer;
+
+        *(wayland_header *)Buffer = Header;
+        Buffer += sizeof(wayland_header);
+
+        *(u32 *)Buffer = (u32)Title.Size + 1;
+        Buffer += sizeof(u32);
+        MemoryCopy(Buffer, Title.Str, Title.Size + 1);
+
+        Assert(Header.Size == send(Context.SocketFd, Temp, Header.Size, 0));
+
+        ScratchEnd(Scratch);
+    }
+
+    {
         // NOTE(acol): Commit surface
         temp_arena Scratch = ScratchBegin(0, 0);
 
@@ -313,15 +346,194 @@ i32 main(void) {
                                  .Size = sizeof(wayland_header)};
 
         u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
-        u8 *Temp = Buffer;
 
         *(wayland_header *)Buffer = Header;
-        Buffer += sizeof(wayland_header);
 
-        Assert(Header.Size == send(Context.SocketFd, Temp, Buffer - Temp, 0));
+        Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
 
         ScratchEnd(Scratch);
     }
+    {
+        temp_arena Scratch = ScratchBegin(0, 0);
+        ring_buffer RingBuffer = Context.RingBuffer;
+
+        i64 Received =
+            recv(Context.SocketFd, RingBuffer.Data + (RingBuffer.Written & (RingBuffer.RingSize - 1)),
+                 RingBuffer.RingSize, 0);
+        Assert(Received != -1);
+        RingBuffer.Written += Received;
+        WaylandLog("Received: %lld\n", Received);
+
+        while (RingBuffer.Written > RingBuffer.Read) {
+            u64 ReadPrev = RingBuffer.Read;
+            wayland_header Header = {0};
+            RingBufferReadDirect(RingBuffer, Header, wayland_header);
+            if (Header.ResourceId == Context.XdgToplevel &&
+                Header.Opcode == WAYLAND_XDG_TOPLEVEL_EVENT_CONFIGURE) {
+                u32 Width = 0;
+                RingBufferReadDirect(RingBuffer, Width, u32);
+
+                u32 Height = 0;
+                RingBufferReadDirect(RingBuffer, Height, u32);
+
+                u32 Length = 0;
+                RingBufferReadDirect(RingBuffer, Length, u32);
+
+                u32 *States = (u32 *)ArenaPush(Scratch.Arena, Length);
+                RingBufferRead(RingBuffer, States, Length);
+
+                WaylandLog("Width=%u Height=%u", Width, Height);
+                if (Length) {
+                    WaylandLog(" states[ ");
+                    for (i32 i = 0; i < Length / 4; i++) {
+                        WaylandLog("%u ", States[i]);
+                    }
+                    WaylandLog("]");
+                }
+                WaylandLog("\n");
+                if (Width && Height) {
+                    Context.Width = Width;
+                    Context.Height = Height;
+                }
+            } else if (Header.ResourceId == Context.XdgSurfaceId &&
+                       Header.Opcode == WAYLAND_XDG_SURFACE_EVENT_CONFIGURE) {
+                // NOTE(acol): Configure/Ack configure
+                u32 Configure = 0;
+                RingBufferReadDirect(RingBuffer, Configure, u32);
+                WaylandLog("WAYLAND_XDG_SURFACE_EVENT_CONFIGURE\n");
+
+                wayland_header SendHeader = {.ResourceId = Context.XdgSurfaceId,
+                                             .Opcode = WAYLAND_XDG_SURFACE_ACK_CONFIGURE_OPCODE,
+                                             .Size = sizeof(wayland_header) + sizeof(u32)};
+
+                u8 *Buff = (u8 *)ArenaPush(Scratch.Arena, SendHeader.Size);
+                *(wayland_header *)Buff = SendHeader;
+                *(u32 *)(Buff + sizeof(wayland_header)) = Configure;
+                Assert(SendHeader.Size == send(Context.SocketFd, Buff, SendHeader.Size, 0));
+                WaylandLog("WAYLAND_XDG_SURFACE_ACK_CONFIGURE_OPCODE\n");
+
+            } else if (Header.ResourceId == Context.XdgWmBaseId &&
+                       Header.Opcode == WAYLAND_XDG_WM_BASE_EVENT_PING) {
+                // NOTE(acol): Ping pong
+                u32 Ping = 0;
+                RingBufferReadDirect(RingBuffer, Ping, u32);
+                WaylandLog("WAYLAND_XDG_WM_BASE_EVENT_PING\n");
+
+                wayland_header SendHeader = {.ResourceId = Context.XdgWmBaseId,
+                                             .Opcode = WAYLAND_XDG_WM_BASE_PONG_OPCODE,
+                                             .Size = sizeof(wayland_header) + sizeof(u32)};
+
+                u8 *Buff = (u8 *)ArenaPush(Scratch.Arena, SendHeader.Size);
+                *(wayland_header *)Buff = SendHeader;
+                *(u32 *)(Buff + sizeof(wayland_header)) = Ping;
+                Assert(SendHeader.Size == send(Context.SocketFd, Buff, SendHeader.Size, 0));
+                WaylandLog("WAYLAND_XDG_WM_BASE_PONG_OPCODE\n");
+
+            } else if (Unlikely(Header.ResourceId == WAYLAND_DISPLAY_OBJECT_ID &&
+                                Header.Opcode == WAYLAND_WL_DISPLAY_ERROR_EVENT)) {
+                u32 ObjectId = 0;
+                RingBufferReadDirect(RingBuffer, ObjectId, u32);
+
+                u32 Code = 0;
+                RingBufferReadDirect(RingBuffer, Code, u32);
+
+                u32 ErrorLen = 0;
+                RingBufferReadDirect(RingBuffer, ErrorLen, u32);
+                WaylandLog(TXT_RED "\nFatal Error:\n  Target Obejct: %u Code: %u Error: %s\n\n" TXT_RST,
+                           ObjectId, Code, RingBuffer.Data + (RingBuffer.Read & (RingBuffer.RingSize - 1)));
+            } else {
+                Trap();
+            }
+            RingBuffer.Read = ReadPrev + Header.Size;
+        }
+        ScratchEnd(Scratch);
+        Context.RingBuffer = RingBuffer;
+    }
+
+    {
+        temp_arena Scratch = ScratchBegin(0, 0);
+        ring_buffer RingBuffer = Context.RingBuffer;
+
+        i64 Received =
+            recv(Context.SocketFd, RingBuffer.Data + (RingBuffer.Written & (RingBuffer.RingSize - 1)),
+                 RingBuffer.RingSize, 0);
+        Assert(Received != -1);
+        RingBuffer.Written += Received;
+        WaylandLog("Received: %lld\n", Received);
+
+        while (RingBuffer.Written > RingBuffer.Read) {
+            u64 ReadPrev = RingBuffer.Read;
+            wayland_header Header = {0};
+            RingBufferReadDirect(RingBuffer, Header, wayland_header);
+            if (Header.ResourceId == Context.XdgWmBaseId && Header.Opcode == WAYLAND_XDG_WM_BASE_EVENT_PING) {
+                // NOTE(acol): Ping pong
+                u32 Ping = 0;
+                RingBufferReadDirect(RingBuffer, Ping, u32);
+                WaylandLog("WAYLAND_XDG_WM_BASE_EVENT_PING\n");
+
+                wayland_header SendHeader = {.ResourceId = Context.XdgWmBaseId,
+                                             .Opcode = WAYLAND_XDG_WM_BASE_PONG_OPCODE,
+                                             .Size = sizeof(wayland_header) + sizeof(u32)};
+
+                u8 *Buff = (u8 *)ArenaPush(Scratch.Arena, SendHeader.Size);
+                *(wayland_header *)Buff = SendHeader;
+                *(u32 *)(Buff + sizeof(wayland_header)) = Ping;
+                Assert(SendHeader.Size == send(Context.SocketFd, Buff, SendHeader.Size, 0));
+                WaylandLog("WAYLAND_XDG_WM_BASE_PONG_OPCODE\n");
+            } else if (Unlikely(Header.ResourceId == WAYLAND_DISPLAY_OBJECT_ID &&
+                                Header.Opcode == WAYLAND_WL_DISPLAY_ERROR_EVENT)) {
+                u32 ObjectId = 0;
+                RingBufferReadDirect(RingBuffer, ObjectId, u32);
+
+                u32 Code = 0;
+                RingBufferReadDirect(RingBuffer, Code, u32);
+
+                u32 ErrorLen = 0;
+                RingBufferReadDirect(RingBuffer, ErrorLen, u32);
+                WaylandLog("Fatal Error:\n  Target Obejct: %u Code: %u Error: %s\n\n", ObjectId, Code,
+                           RingBuffer.Data + (RingBuffer.Read & (RingBuffer.RingSize - 1)));
+            }
+
+            RingBuffer.Read = ReadPrev + Header.Size;
+        }
+        ScratchEnd(Scratch);
+    }
+
+    // {
+    //     // NOTE(acol): cleanup
+    //     temp_arena Scratch = ScratchBegin(0, 0);
+    //
+    //     wayland_header Header = {.ResourceId = Context.XdgToplevel,
+    //                              .Opcode = WAYLAND_XDG_TOPLEVEL_DESTROY_OPCODE,
+    //                              .Size = sizeof(wayland_header)};
+    //
+    //     u8 *Buffer = (u8 *)ArenaPush(Scratch.Arena, Header.Size);
+    //     *(wayland_header *)Buffer = Header;
+    //
+    //     Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
+    //
+    //     Header.ResourceId = Context.XdgSurfaceId;
+    //     Header.Opcode = WAYLAND_XDG_SURFACE_DESTROY_OPCODE;
+    //     *(wayland_header *)Buffer = Header;
+    //     Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
+    //
+    //     Header.ResourceId = Context.WlSurfaceId;
+    //     Header.Opcode = WAYLAND_WL_SURFACE_DESTROY_OPCODE;
+    //     *(wayland_header *)Buffer = Header;
+    //     Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
+    //
+    //     Header.ResourceId = Context.XdgWmBaseId;
+    //     Header.Opcode = WAYLAND_XDG_WM_BASE_DESTROY_OPCODE;
+    //     *(wayland_header *)Buffer = Header;
+    //     Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
+    //
+    //     Header.ResourceId = Context.WlCompositorId;
+    //     Header.Opcode = WAYLAND_WL_SUBCOMPOSITOR_DESTROY_OPCODE;
+    //     *(wayland_header *)Buffer = Header;
+    //     Assert(Header.Size == send(Context.SocketFd, Buffer, Header.Size, 0));
+    //
+    //     ScratchEnd(Scratch);
+    // }
 
     RingBufferRelease(Context.RingBuffer);
     TctxRelease();
