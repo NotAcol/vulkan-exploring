@@ -3,8 +3,8 @@
 -DVK_VALIDATE=1
 -DARENA_LOGGING=0
 -DWAYLAND_DEBUG=1
--mfma
 -mavx2
+-mfma
 -fno-exceptions 
 -Wall 
 -Wextra
@@ -16,5 +16,5 @@
 -fuse-ld=lld 
 -fno-trapping-math
 -fno-math-errno
--fsanitize=address,leak
 -g3
+-lvulkan

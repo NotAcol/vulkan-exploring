@@ -6,11 +6,15 @@
 #include <sys/un.h>
 #include <poll.h>
 
+#define VK_USE_PLATFORM_WAYLAND_KHR
+
 #if WAYLAND_DEBUG
     #define WaylandLog(...) printf(__VA_ARGS__)
 #else
     #define WaylandLog(...)
 #endif
+
+#define VULKAN_WINDOWING_EXTENSIONS (char **){"VK_KHR_surface", "VK_KHR_wayland_surface"}
 
 #define DISPLAY_OBJECT_ID 1
 
@@ -36,8 +40,6 @@
 #define XDG_TOPLEVEL_DESTROY_OPCODE 0
 #define WL_COMPOSITOR_CREATE_SURFACE_OPCODE 0
 #define XDG_SURFACE_DESTROY_OPCODE 0
-
-// TODO xdg configure_bounds, close
 
 #define TOPLEVEL_STATES  \
     X(MAXIMIZED)         \
@@ -106,7 +108,8 @@ static u32 WaylandRegistryBind(u32 Fd, u32 CurrentId, u32 Registry, u32 Name, u3
                                char *Interface);
 static void WaylandCommitSurface(wayland_context *WlCtx);
 static void WaylandPollEvents(wayland_context *WlCtx);
-
 static b32 WaylandShouldResize(wayland_context *WlCtx);
+// static void WaylandWindowClose(wayland_context *WlCtx);
+static void WaylandTerminate(wayland_context *WlCtx);
 
 #endif  // GFX_H

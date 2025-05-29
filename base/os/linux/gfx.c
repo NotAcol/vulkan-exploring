@@ -255,6 +255,7 @@ static void WaylandInit(wayland_context *WlCtx, u32 Height, u32 Width, string8 T
                                     NOTE(acol): Read events
 
         ===================================================================================== */
+    char *ColorThing[] = {TXT_CYN, TXT_MAG};
     Received =
         recv(Fd, RingBuffer.Data + (RingBuffer.Written & (RingBuffer.RingSize - 1)), RingBuffer.RingSize, 0);
     Assert(Received != -1);
@@ -285,13 +286,11 @@ static void WaylandInit(wayland_context *WlCtx, u32 Height, u32 Width, string8 T
             RingBufferRead(RingBuffer, States, Length);
 
             WaylandLog("Width=%u Height=%u", NewWidth, NewHeight);
-            if (Length) {
-                WaylandLog(" States[ ");
-                for (u32 i = 0; i < Length / 4; i++) {
-                    WaylandLog("%s, ", StateNames[States[i] - 1]);
-                }
-                WaylandLog("]");
+            WaylandLog(" States[ ");
+            for (u32 i = 0; i < Length / 4; i++) {
+                WaylandLog("%s%s ", ColorThing[i & 1], StateNames[States[i] - 1]);
             }
+            WaylandLog(TXT_RST "]");
             WaylandLog("\n");
             if (NewWidth && NewHeight) {
                 Width = NewWidth;
@@ -329,9 +328,9 @@ static void WaylandInit(wayland_context *WlCtx, u32 Height, u32 Width, string8 T
 
             WaylandLog("Wayland Window Manager Capabilities[ ");
             for (u32 i = 0; i < Length / 4; i++) {
-                WaylandLog("%s, ", CapabilitiesNames[Capabilities[i] - 1]);
+                WaylandLog("%s%s ", ColorThing[i & 1], CapabilitiesNames[Capabilities[i] - 1]);
             }
-            WaylandLog(" ]\n");
+            WaylandLog(TXT_RST " ]\n");
 
         } else if (Header.ObjectId == XdgToplevel && Header.OpCode == XDG_TOPLEVEL_EVENT_CLOSE) {
             Trap();
@@ -409,10 +408,13 @@ static void WaylandPollEvents(wayland_context *WlCtx) {
     u32 Height = WlCtx->Height;
     u32 Width = WlCtx->Width;
     i32 Fd = WlCtx->Fd;
+    u32 XdgWmBase = WlCtx->XdgWmBase;
     u32 XdgSurface = WlCtx->XdgSurface;
     u32 XdgToplevel = WlCtx->XdgToplevel;
     wayland_state State = WlCtx->State;
     b32 ShouldQuit;
+
+    char *ColorThing[] = {TXT_CYN, TXT_MAG};
 
     if (State == WLSTATE_Quit || State == WLSTATE_Error) return;
 
@@ -437,8 +439,22 @@ static void WaylandPollEvents(wayland_context *WlCtx) {
             RingBufferReadDirect(RingBuffer, Header, wayland_header);
 
             RingBuffer.Read = ReadPrev + Header.Size;
+            if (Header.ObjectId == XdgWmBase && Header.OpCode == XDG_WM_BASE_EVENT_PING) {
+                u32 Ping = 0;
+                RingBufferReadDirect(RingBuffer, Ping, u32);
+                WaylandLog("WAYLAND PING\n");
 
-            if (Header.ObjectId == XdgToplevel && Header.OpCode == XDG_TOPLEVEL_EVENT_CONFIGURE) {
+                wayland_header SendHeader = {.ObjectId = XdgWmBase,
+                                             .OpCode = XDG_WM_BASE_PONG_OPCODE,
+                                             .Size = sizeof(wayland_header) + sizeof(u32)};
+
+                u8 *Buff = (u8 *)ArenaPush(Scratch.Arena, SendHeader.Size);
+                *(wayland_header *)Buff = SendHeader;
+                *(u32 *)(Buff + sizeof(wayland_header)) = Ping;
+                Assert(SendHeader.Size == send(Fd, Buff, SendHeader.Size, 0));
+                WaylandLog("WAYLAND PONG\n");
+
+            } else if (Header.ObjectId == XdgToplevel && Header.OpCode == XDG_TOPLEVEL_EVENT_CONFIGURE) {
 #if WAYLAND_DEBUG
     #define X(S) #S,
                 char *StateNames[] = {TOPLEVEL_STATES};
@@ -457,13 +473,11 @@ static void WaylandPollEvents(wayland_context *WlCtx) {
                 RingBufferRead(RingBuffer, States, Length);
 
                 WaylandLog("Width=%u Height=%u", NewWidth, NewHeight);
-                if (Length) {
-                    WaylandLog(" States[ ");
-                    for (u32 i = 0; i < Length / 4; i++) {
-                        WaylandLog("%s, ", StateNames[States[i] - 1]);
-                    }
-                    WaylandLog("]");
+                WaylandLog(" States[ ");
+                for (u32 i = 0; i < Length / 4; i++) {
+                    WaylandLog("%s%s ", ColorThing[i & 1], StateNames[States[i] - 1]);
                 }
+                WaylandLog(TXT_RST "]");
                 WaylandLog("\n");
                 if (NewWidth && NewHeight) {
                     Width = NewWidth;
@@ -527,3 +541,5 @@ static b32 WaylandShouldResize(wayland_context *WlCtx) {
     if (WlCtx->State == WLSTATE_ReadyToResize) return 1;
     return 0;
 }
+
+static void WaylandTerminate(wayland_context *WlCtx) { close(WlCtx->Fd); }

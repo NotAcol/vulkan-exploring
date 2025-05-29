@@ -18,3 +18,4 @@
 -fno-math-errno
 -fsanitize=address
 -g3
+-lvulkan
