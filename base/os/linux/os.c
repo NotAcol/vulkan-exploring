@@ -34,7 +34,7 @@ static b32 OsCommitLarge(void *Ptr, u64 Size) {
 
 static os_handle OsFileOpen(string8 Path, os_access_flags Flags) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
+    string8 PathCopy   = PushString8Copy(Scratch.Arena, Path);
 
     u32 LinuxFlags = 0;
     if (Flags & OsAccess_Write & OsAccess_Read) {
@@ -68,8 +68,8 @@ static void OsFileClose(os_handle File) {
 
 static b32 OsFileDelete(string8 Path) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
-    b32 Ret = 0;
+    string8 PathCopy   = PushString8Copy(Scratch.Arena, Path);
+    b32 Ret            = 0;
     if (unlink((char *)PathCopy.Str) != -1) Ret = 1;
     ScratchEnd(Scratch);
     return Ret;
@@ -77,15 +77,15 @@ static b32 OsFileDelete(string8 Path) {
 
 static file_info *OsFileStat(arena *Arena, string8 Path) {
     // TODO(acol): I need to also extract the name from the path
-    string8 PathCopy = PushString8Copy(Arena, Path);
+    string8 PathCopy    = PushString8Copy(Arena, Path);
     file_info *FileInfo = ArenaPush(Arena, sizeof(file_info));
 
     struct stat StatStruct = {0};
     stat((char *)PathCopy.Str, &StatStruct);
 
     //    FileInfo->Path = PathCopy;
-    FileInfo->Size = (u64)StatStruct.st_size;
-    FileInfo->Created = (u64)StatStruct.st_ctim.tv_nsec;
+    FileInfo->Size     = (u64)StatStruct.st_size;
+    FileInfo->Created  = (u64)StatStruct.st_ctim.tv_nsec;
     FileInfo->Modified = (u64)StatStruct.st_mtim.tv_nsec;
     if (StatStruct.st_mode & S_IFDIR) {
         FileInfo->Flags |= FilePropertyFlag_IsDirectory;
@@ -98,7 +98,7 @@ static b32 OsMakeDir(string8 Path) {
     b32 Ret = 0;
 
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
+    string8 PathCopy   = PushString8Copy(Scratch.Arena, Path);
 
     if (mkdir((char *)PathCopy.Str, 0755) != -1) Ret = 1;
 
@@ -110,7 +110,7 @@ static b32 OsDeleteDir(string8 Path) {
     b32 Ret = 0;
 
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
+    string8 PathCopy   = PushString8Copy(Scratch.Arena, Path);
 
     if (rmdir((char *)PathCopy.Str) != -1) Ret = 1;
 
@@ -121,8 +121,8 @@ static b32 OsDeleteDir(string8 Path) {
 static u64 OsFileRead(os_handle File, v2_u64 ReadWindow, void *Data) {
     if (File == 0) return 0;
     u64 LeftToRead = ReadWindow.Max - ReadWindow.Min;
-    u64 Read = 0;
-    i32 LastRead = 0;
+    u64 Read       = 0;
+    i32 LastRead   = 0;
 
     while (LeftToRead > 0) {
         LastRead = pread(File, (u8 *)Data + Read, LeftToRead, ReadWindow.Min + Read);
@@ -142,8 +142,8 @@ static u64 OsFileWrite(os_handle File, v2_u64 WriteWindow, void *Data) {
     }
 
     u64 LeftToWrite = WriteWindow.Max - WriteWindow.Min;
-    u64 Written = 0;
-    i32 LastWrite = 0;
+    u64 Written     = 0;
+    i32 LastWrite   = 0;
 
     while (LeftToWrite > 0) {
         LastWrite = pwrite(File, (u8 *)Data + Written, LeftToWrite, WriteWindow.Min + Written);
@@ -160,7 +160,7 @@ static u64 OsFileWrite(os_handle File, v2_u64 WriteWindow, void *Data) {
 static void *OsFileMap(os_handle File, os_access_flags Flags, v2_u64 MapWindow) {
     if (File == 0) return (void *)0;
 
-    void *Ret = 0;
+    void *Ret      = 0;
     i32 LinuxFlags = 0;
 
     if (Flags & OsAccess_Read) LinuxFlags |= PROT_READ;
@@ -177,7 +177,7 @@ static void OsFileUnmap(void *Ptr, v2_u64 MapWindow) { munmap(Ptr, MapWindow.Max
 
 static os_handle OsSharedMemoryAlloc(string8 Name, u64 Size) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
+    string8 NameCopy   = PushString8Copy(Scratch.Arena, Name);
 
     i32 Id = shm_open((char *)NameCopy.Str, O_RDWR, 0);
     ftruncate(Id, Size);
@@ -188,7 +188,7 @@ static os_handle OsSharedMemoryAlloc(string8 Name, u64 Size) {
 }
 static void OsSharedMemoryDelete(string8 Name) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
+    string8 NameCopy   = PushString8Copy(Scratch.Arena, Name);
 
     shm_unlink((char *)NameCopy.Str);
 
@@ -197,9 +197,9 @@ static void OsSharedMemoryDelete(string8 Name) {
 
 static os_handle OsSharedMemoryOpen(string8 Name) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 NameCopy = PushString8Copy(Scratch.Arena, Name);
+    string8 NameCopy   = PushString8Copy(Scratch.Arena, Name);
 
-    i32 Id = shm_open((char *)NameCopy.Str, O_RDWR, 0);
+    i32 Id        = shm_open((char *)NameCopy.Str, O_RDWR, 0);
     os_handle Ret = Id;
 
     ScratchEnd(Scratch);
@@ -227,7 +227,7 @@ static void OsSharedMemoryUnmap(os_handle Handle, void *Ptr, v2_u64 MapWindow) {
 }
 
 static ring_buffer RingBufferAlloc(u64 Size) {
-    u8 *Base = 0;
+    u8 *Base     = 0;
     u8 *BuffPrev = 0;
     u8 *RingBuff = 0;
     u8 *BuffNext = 0;
@@ -242,47 +242,72 @@ static ring_buffer RingBufferAlloc(u64 Size) {
     ftruncate(FileFd, RingSize);
 
     if ((Base = (u8 *)mmap(0, RingSize * 3, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)) == MAP_FAILED)
-        goto CLEANUP_1;
+        return (ring_buffer){0};
 
-    if ((BuffPrev = (u8 *)mmap(Base, RingSize, PROT_READ | PROT_WRITE, MAP_POPULATE | MAP_SHARED | MAP_FIXED,
-                               FileFd, 0)) == MAP_FAILED)
-        goto CLEANUP_1;
-
-    if ((RingBuff = (u8 *)mmap(Base + RingSize, RingSize, PROT_READ | PROT_WRITE,
-                               MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED)
-        goto CLEANUP_2;
-
-    if ((BuffNext = (u8 *)mmap(Base + 2 * RingSize, RingSize, PROT_READ | PROT_WRITE,
-                               MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED)
-        goto CLEANUP_3;
+    if (((BuffPrev = (u8 *)mmap(Base, RingSize, PROT_READ | PROT_WRITE, MAP_POPULATE | MAP_SHARED | MAP_FIXED,
+                                FileFd, 0)) == MAP_FAILED) ||
+        ((RingBuff = (u8 *)mmap(Base + RingSize, RingSize, PROT_READ | PROT_WRITE,
+                                MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED) ||
+        ((BuffNext = (u8 *)mmap(Base + 2 * RingSize, RingSize, PROT_READ | PROT_WRITE,
+                                MAP_POPULATE | MAP_SHARED | MAP_FIXED, FileFd, 0)) == MAP_FAILED)) {
+        munmap(Base, RingSize * 3);
+        return (ring_buffer){0};
+    }
 
     Assert(((u64)(RingBuff - BuffPrev) == RingSize) && ((u64)(BuffNext - RingBuff) == RingSize));
 
-    if (((u64)(RingBuff - BuffPrev) != RingSize) || ((u64)(BuffNext - RingBuff) != RingSize)) goto CLEANUP_4;
+    if (((u64)(RingBuff - BuffPrev) != RingSize) || ((u64)(BuffNext - RingBuff) != RingSize)) {
+        munmap(Base, RingSize * 3);
+        return (ring_buffer){0};
+    }
 
     return (ring_buffer){.Data = RingBuff, .RingSize = RingSize, .Read = 0, .Written = 0};
-
-CLEANUP_4:
-    munmap(BuffNext, RingSize);
-CLEANUP_3:
-    munmap(RingBuff, RingSize);
-CLEANUP_2:
-    munmap(BuffPrev, RingSize);
-CLEANUP_1:
-
-    return (ring_buffer){0};
 }
 
-static void RingBufferRelease(ring_buffer RingBuffer) {
-    u8 *Buff = (u8 *)RingBuffer.Data;
-    u64 RingSize = RingBuffer.RingSize;
+static void RingBufferRelease(ring_buffer *RingBuffer) {
+    u8 *Buff     = RingBuffer->Data;
+    u64 RingSize = RingBuffer->RingSize;
 
     munmap(Buff - RingSize, RingSize * 3);
 }
 
+static void *RingBufferWritePtr(ring_buffer *RingBuffer) {
+    return RingBuffer->Data + (RingBuffer->Written & (RingBuffer->RingSize - 1));
+}
+
+static void RingBufferWriteEnd(ring_buffer *RingBuffer, u64 Size) {
+    AssertAlways(RingBuffer->Written + Size - RingBuffer->Read <= RingBuffer->RingSize);
+    RingBuffer->Written = +Size;
+}
+
+static void *RingBufferWrite(ring_buffer *RingBuffer, void *From, u64 Size) {
+    void *Ret = RingBufferWritePtr(RingBuffer);
+    MemoryCopy(Ret, From, Size);
+
+    RingBufferWriteEnd(RingBuffer, Size);
+    return Ret;
+}
+
+static void RingBufferReadEnd(ring_buffer *RingBuffer, u64 Size) {
+    AssertAlways(RingBuffer->Read + Size <= RingBuffer->Written);
+    RingBuffer->Read += Size;
+}
+
+static void *RingBufferReadPtr(ring_buffer *RingBuffer) {
+    return RingBuffer->Data + (RingBuffer->Read & (RingBuffer->RingSize - 1));
+}
+
+static void *RingBufferRead(ring_buffer *RingBuffer, void *To, u64 Size) {
+    void *Ret = RingBufferReadPtr(RingBuffer);
+    MemoryCopy(To, Ret, Size);
+
+    RingBufferReadEnd(RingBuffer, Size);
+    return Ret;
+}
+
 static os_handle OsLibraryOpen(string8 Path) {
     temp_arena Scratch = ScratchBegin(0, 0);
-    string8 PathCopy = PushString8Copy(Scratch.Arena, Path);
+    string8 PathCopy   = PushString8Copy(Scratch.Arena, Path);
 
     os_handle Lib = (u64)dlopen((char *)PathCopy.Str, RTLD_LAZY | RTLD_LOCAL);
 

@@ -3,43 +3,16 @@
 
 #include "intrinsics.h"
 
-/*
- NOTE(acol):    Arena free list isn't per item, instead of releasing a link when using
-                chain growth its put into a single linked list and reused when needed.
-                If you want per item a simple pool allocator can work like this:
-
-struct entity {
-    entity *Next;
-    v2 Data;
-};
-
-struct entity_pool {
-    arena *Arena;
-    entity *FirstFreeEntity;
-};
-
-static entity *EntityAlloc(entity_pool Pool) {
-    entity *FreeSlot = Pool->FirstFreeEntity;
-    if (FreeSlot) {
-        Pool->FirstFreeEntity = FreeSlot->Next;
-        MemoryZeroStruct(FreeSlot);
-    } else {
-        FreeSlot = ArenaPush(Pool.Arena, sizeof(entity));
-        MemoryZeroStruct(FreeSlot);
-    }
-    return FreeSlot;
-}
-
-static void EntityRelease(entity_pool Pool, entity Entity) {
-    Entity.Next = Pool.FirstFreeEntity;
-    Pool.FirstFreeEntity = Entity;
-}
-*/
+#if ARENA_DEBUG
+    #define ArenaLog(...) dprintf(2, __VA_ARGS__)
+#else
+    #define ArenaLog(...)
+#endif
 
 typedef enum arena_flags {
     Arena_NoChainGrow = (1 << 0),
-    Arena_LargePages = (1 << 1),
-    Arena_FreeList = (1 << 2)
+    Arena_LargePages  = (1 << 1),
+    Arena_FreeList    = (1 << 2)
 } arena_flags;
 
 // NOTE(acol): for padding to cache line
@@ -88,11 +61,11 @@ static void ArenaReset(arena *Arena);
 static temp_arena TempBegin(arena *Arena);
 static void TempEnd(temp_arena Temp);
 
-#define ArenaAlloc(...)                                                         \
-    ArenaAlloc_((arena_alloc_params){.Flags = ARENA_DEFAULT_FLAGS,              \
-                                     .ReserveSize = ARENA_DEFAULT_RESERVE_SIZE, \
-                                     .CommitSize = ARENA_DEFAULT_COMMIT_SIZE,   \
-                                     .BackingBuffer = 0,                        \
+#define ArenaAlloc(...)                                                           \
+    ArenaAlloc_((arena_alloc_params){.Flags         = ARENA_DEFAULT_FLAGS,        \
+                                     .ReserveSize   = ARENA_DEFAULT_RESERVE_SIZE, \
+                                     .CommitSize    = ARENA_DEFAULT_COMMIT_SIZE,  \
+                                     .BackingBuffer = 0,                          \
                                      __VA_ARGS__})
 
 #define ArenaPushNoZero(Arena, Size) ArenaPushNoZeroAligned((Arena), (Size), 4)
@@ -108,3 +81,37 @@ static void TempEnd(temp_arena Temp);
 #define PushArray(Arena, Type, Count) (Type *)ArenaPushAligned((Arena), sizeof(Type) * (Count), AlignOf(Type))
 
 #endif  // ARENA_H
+
+/*
+ NOTE(acol):    Arena free list isn't per item, instead of releasing a link when using
+                chain growth its put into a single linked list and reused when needed.
+                If you want per item a simple pool allocator can work like this:
+
+struct entity {
+    entity *Next;
+    v2 Data;
+};
+
+struct entity_pool {
+    arena *Arena;
+    entity *FirstFreeEntity;
+};
+
+static entity *EntityAlloc(entity_pool Pool) {
+    entity *FreeSlot = Pool->FirstFreeEntity;
+    if (FreeSlot) {
+        Pool->FirstFreeEntity = FreeSlot->Next;
+        MemoryZeroStruct(FreeSlot);
+    } else {
+        FreeSlot = ArenaPush(Pool.Arena, sizeof(entity));
+        MemoryZeroStruct(FreeSlot);
+    }
+    return FreeSlot;
+}
+
+static void EntityRelease(entity_pool Pool, entity Entity) {
+    Entity.Next          = Pool.FirstFreeEntity;
+    Pool.FirstFreeEntity = Entity;
+}
+*/
+

@@ -11,21 +11,21 @@
 #include <dlfcn.h>
 
 typedef enum os_access_flags {
-    OsAccess_Read = (1 << 0),
-    OsAccess_Write = (1 << 1),
-    OsAccess_Append = (1 << 2),
+    OsAccess_Read    = (1 << 0),
+    OsAccess_Write   = (1 << 1),
+    OsAccess_Append  = (1 << 2),
     OsAccess_Execute = (1 << 3),
 } os_access_flags;
 
 static const u64 OS_LARGE_PAGE_SIZE = MB(2);
-static const u64 OS_PAGE_SIZE = KB(4);
+static const u64 OS_PAGE_SIZE       = KB(4);
 
 typedef u64 os_handle;
 
 typedef u32 file_property_flags;
 enum {
     FilePropertyFlag_IsDirectory = (1 << 0),
-    FilePropertyFlag_IsSymlink = (1 << 1),
+    FilePropertyFlag_IsSymlink   = (1 << 1),
 };
 
 typedef struct file_info {
@@ -60,11 +60,6 @@ static void OsSharedMemoryClose(os_handle Handle);
 static void *OsSharedMemoryMap(os_handle Handle, v2_u64 MapWindow);
 static void OsSharedMemoryUnmap(os_handle Handle, void *Ptr, v2_u64 MapWindow);
 
-// NOTE(acol):  Keeping this shit here cause it's a little hacky and it uses os stuff heavily in linux and
-//              windows
-static ring_buffer RingBufferAlloc(u64 Size);
-static void RingBufferRelease(ring_buffer RingBuffer);
-
 static os_handle OsFileOpen(string8 Path, os_access_flags Flags);
 static void OsFileClose(os_handle File);
 static b32 OsFileDelete(string8 Path);
@@ -82,24 +77,15 @@ static os_handle OsLibraryOpen(string8 Path);
 static void *OsLibraryLoadSymbol(os_handle Lib, string8 Symbol);
 static void OsLibraryClose(os_handle Lib);
 
-#define RingBufferWrite(Ring, Source, Size)                                                         \
-    Statement(Assert(((Ring).Written + (Size) - (Ring).Read) <= (Ring).RingSize);                   \
-              MemoryCopy((Ring).Data + ((Ring).Written & ((Ring).RingSize - 1)), (Source), (Size)); \
-              (Ring).Written += (Size);)
-
-#define RingBufferRead(Ring, Dest, Size)                                                       \
-    Statement(Assert(((Ring).Read + (Size)) <= (Ring).Written);                                \
-              MemoryCopy((Dest), (Ring).Data + ((Ring).Read & ((Ring).RingSize - 1)), (Size)); \
-              (Ring).Read += (Size);)
-
-#define RingBufferWriteDirect(Ring, Value, Type)                                         \
-    Statement(Assert(((Ring).Written + sizeof(Type) - (Ring).Read) <= (Ring).RingSize);  \
-              *((Type *)&(Ring).Data[(Ring).Written & ((Ring).RingSize - 1)]) = (Value); \
-              (Ring).Written += sizeof(Type);)
-
-#define RingBufferReadDirect(Ring, Value, Type)                                       \
-    Statement(Assert(((Ring).Read + sizeof(Type)) <= (Ring).Written);                 \
-              (Value) = *((Type *)&(Ring).Data[(Ring).Read & ((Ring).RingSize - 1)]); \
-              (Ring).Read += sizeof(Type);)
+// NOTE(acol):  Keeping this shit here cause it's a little hacky and it uses os stuff heavily in linux and
+//              windows
+static ring_buffer RingBufferAlloc(u64 Size);
+static void RingBufferRelease(ring_buffer *RingBuffer);
+static void *RingBufferWritePtr(ring_buffer *RingBuffer);
+static void RingBufferWriteEnd(ring_buffer *RingBuffer, u64 Size);
+static void *RingBufferWrite(ring_buffer *RingBuffer, void *From, u64 Size);
+static void *RingBufferReadPtr(ring_buffer *RingBuffer);
+static void RingBufferReadEnd(ring_buffer *RingBuffer, u64 Size);
+static void *RingBufferRead(ring_buffer *RingBuffer, void *To, u64 Size);
 
 #endif  // OS_H

@@ -327,14 +327,20 @@
     #error Unknown trap intrinsic for this compiler.
 #endif
 
+#if ASSERT
+    #define AssertLog(C)                                                                             \
+        dprintf(2,                                                                                   \
+                TXT_RED "You " TXT_YEL "done " TXT_GRN "did " TXT_BLU "it " TXT_MAG "bruv " TXT_UWHT \
+                        "%s:%d" TXT_RST                                                              \
+                        "\n"                                                                         \
+                        "  Failed condition: " TXT_RED #C TXT_RST "\n",                              \
+                __FILE__, __LINE__)
+#else
+    #define AssertLog(C)
+#endif
+
 #if !defined(AssertBreak)
-    #define AssertBreak(C)                                                                    \
-        Statement(dprintf(2,                                                                  \
-                          TXT_RED "You " TXT_YEL "done " TXT_GRN "did " TXT_BLU "it " TXT_MAG \
-                                  "bruv " TXT_UWHT "%s:%d" TXT_RST "\n"                       \
-                                  "  Failed condition: " TXT_RED #C TXT_RST "\n",             \
-                          __FILE__, __LINE__);                                                \
-                  Trap();)
+    #define AssertBreak(C) Statement( AssertLog(C); Trap();)
 #endif
 
 #define AssertAlways(C) Statement(if (Unlikely(!(C))) { AssertBreak(C); })
@@ -342,7 +348,7 @@
 #if ASSERT
     #define Assert(C) AssertAlways(C)
 #else
-    #define Assert(...)
+    #define Assert(C)
 #endif
 
 #define StaticAssert(Condition, Message) _Static_assert((Condition), #Message)
